@@ -63,7 +63,7 @@ h1 {
   gap: 6px;
   padding: 4px 12px;
   background: rgba(0,0,0,0.3);
-  border-radius: 8px;
+  border-radius: 10px;
 }
 #controls {
   margin-top: 16px;
@@ -72,7 +72,7 @@ h1 {
   text-align: center;
   padding: 8px 16px;
   background: rgba(0,0,0,0.2);
-  border-radius: 8px;
+  border-radius: 10px;
 }
 .key-hint { color: #ffd700; font-weight: 800; }
 
@@ -92,7 +92,7 @@ h1 {
   gap: 4px;
   padding: 6px 12px;
   background: rgba(0,0,0,0.4);
-  border-radius: 8px;
+  border-radius: 10px;
   min-width: 140px;
   flex: 1;
   max-width: 280px;
@@ -216,17 +216,17 @@ h1 {
   margin-bottom: 6px;
 }
 .touch-row:last-child { margin-bottom: 0; }
-/* גודל כפתורים – קטן פי 2 */
+/* גודל כפתורים – ×1.5 */
 .touch-btn {
-  width: clamp(26px, 4vw, 50px);
-  height: clamp(26px, 4vw, 50px);
-  min-width: clamp(26px, 4vw, 50px);
+  width: clamp(39px, 6vw, 75px);
+  height: clamp(39px, 6vw, 75px);
+  min-width: clamp(39px, 6vw, 75px);
   opacity: 0.4;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   background: linear-gradient(180deg, #2d5a27 0%, #1e3a2f 100%);
   color: #fff;
-  font-size: clamp(0.6rem, 1.25vw, 0.8rem);
+  font-size: clamp(0.75rem, 1.5vw, 1rem);
   font-weight: 800;
   cursor: pointer;
   display: flex;
@@ -241,7 +241,7 @@ h1 {
   transform: translateY(2px);
   box-shadow: 0 2px 0 #1a2e1a, 0 3px 8px rgba(0,0,0,0.3);
 }
-.touch-btn.wide { width: clamp(35px, 5.5vw, 65px); min-width: clamp(35px, 5.5vw, 65px); }
+.touch-btn.wide { width: clamp(52px, 8vw, 98px); min-width: clamp(52px, 8vw, 98px); }
 .touch-btn.jump { background: linear-gradient(180deg, #4a7c59 0%, #2d5a27 100%); }
 .touch-btn.pause,
 .touch-btn.restart { background: linear-gradient(180deg, #3d4a5c 0%, #2a3542 100%); }
@@ -286,26 +286,26 @@ h1 {
     aspect-ratio: 800 / 480;
     object-fit: contain;
   }
-  /* כפתורים – קטן פי 2 */
+  /* כפתורים – ×1.5 */
   #touchControls .touch-btn {
-    width: clamp(26px, 4vw, 50px);
-    height: clamp(26px, 4vw, 50px);
-    min-width: clamp(26px, 4vw, 50px);
-    font-size: clamp(0.6rem, 1.25vw, 0.8rem);
+    width: clamp(39px, 6vw, 75px);
+    height: clamp(39px, 6vw, 75px);
+    min-width: clamp(39px, 6vw, 75px);
+    font-size: clamp(0.75rem, 1.5vw, 1rem);
     opacity: 0.4;
-    border-radius: 8px;
+    border-radius: 10px;
     box-shadow: 0 4px 0 #1a2e1a, 0 5px 12px rgba(0,0,0,0.3);
   }
   #touchControls .touch-btn:active { opacity: 0.5; }
   #touchControls .touch-btn.wide {
-    width: clamp(35px, 5.5vw, 65px);
-    min-width: clamp(35px, 5.5vw, 65px);
-    font-size: clamp(0.6rem, 1.25vw, 0.8rem);
+    width: clamp(52px, 8vw, 98px);
+    min-width: clamp(52px, 8vw, 98px);
+    font-size: clamp(0.75rem, 1.5vw, 1rem);
   }
-  #touchControls .touch-btn.jump { font-size: clamp(0.6rem, 1.25vw, 0.8rem); }
-  #touchControls .touch-btn.fire { font-size: clamp(0.6rem, 1.3vw, 0.8rem); }
+  #touchControls .touch-btn.jump { font-size: clamp(0.75rem, 1.5vw, 1rem); }
+  #touchControls .touch-btn.fire { font-size: clamp(0.75rem, 1.5vw, 1rem); }
   #touchControls .touch-btn.pause,
-  #touchControls .touch-btn.restart { font-size: clamp(0.6rem, 1.25vw, 0.8rem); }
+  #touchControls .touch-btn.restart { font-size: clamp(0.75rem, 1.5vw, 1rem); }
   .touch-row { gap: 4px; margin-bottom: 4px; }
   .touch-settings { gap: 6px; }
   .touch-left { gap: 6px; }
