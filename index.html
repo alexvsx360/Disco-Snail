@@ -12,6 +12,8 @@
   <meta property="og:description" content="משחק פלטפורמה דינמי – חלזון דיסקו יוצא להרפתקה! עולמות מרובים, בוסים, כוחות מיוחדים, מוזיקת דיסקו ועוד. שחק בדפדפן!" />
   <meta property="og:site_name" content="Disco Snail Adventure" />
   <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2d5a27">
   <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -69,5 +71,10 @@
   <script src="js/levels.js"></script>
   <script src="js/bosses.js"></script>
   <script src="js/main.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    }
+  </script>
 </body>
 </html>
