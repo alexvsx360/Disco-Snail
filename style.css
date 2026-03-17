@@ -162,6 +162,7 @@ h1 {
   -webkit-user-select: none;
 }
 #touchControls .touch-left-column,
+#touchControls .touch-left,
 #touchControls .touch-right {
   pointer-events: auto;
   position: absolute;
@@ -170,27 +171,32 @@ h1 {
 @media (max-width: 1200px), (hover: none), (pointer: coarse) {
   #touchControls { display: block; }
 }
-/* עמודה שמאל: P, R למעלה, קפיצה ו-X מתחת */
+/* P, R, ⛰️ – פינה שמאל למעלה */
 .touch-left-column {
   top: max(16px, env(safe-area-inset-top, 16px));
   left: max(16px, env(safe-area-inset-left, 16px));
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
   align-items: flex-start;
   z-index: 50;
 }
 .touch-settings {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px;
   align-items: flex-start;
 }
+/* קפיצה ו-X – תחתית המסך צד שמאל */
 .touch-left {
+  bottom: max(16px, env(safe-area-inset-bottom, 16px));
+  left: max(16px, env(safe-area-inset-left, 16px));
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   align-items: flex-start;
+  z-index: 50;
 }
 /* חצים – פינה ימין למטה */
 .touch-right {
@@ -210,17 +216,17 @@ h1 {
   margin-bottom: 6px;
 }
 .touch-row:last-child { margin-bottom: 0; }
-/* גודל כפתורים – קטן יותר (בתצוגה 100%) */
+/* גודל כפתורים – קטן פי 2 */
 .touch-btn {
-  width: clamp(52px, 8vw, 100px);
-  height: clamp(52px, 8vw, 100px);
-  min-width: clamp(52px, 8vw, 100px);
+  width: clamp(26px, 4vw, 50px);
+  height: clamp(26px, 4vw, 50px);
+  min-width: clamp(26px, 4vw, 50px);
   opacity: 0.4;
   border: none;
-  border-radius: 14px;
+  border-radius: 8px;
   background: linear-gradient(180deg, #2d5a27 0%, #1e3a2f 100%);
   color: #fff;
-  font-size: clamp(1rem, 2.5vw, 1.5rem);
+  font-size: clamp(0.6rem, 1.25vw, 0.8rem);
   font-weight: 800;
   cursor: pointer;
   display: flex;
@@ -235,7 +241,7 @@ h1 {
   transform: translateY(2px);
   box-shadow: 0 2px 0 #1a2e1a, 0 3px 8px rgba(0,0,0,0.3);
 }
-.touch-btn.wide { width: clamp(70px, 11vw, 130px); min-width: clamp(70px, 11vw, 130px); }
+.touch-btn.wide { width: clamp(35px, 5.5vw, 65px); min-width: clamp(35px, 5.5vw, 65px); }
 .touch-btn.jump { background: linear-gradient(180deg, #4a7c59 0%, #2d5a27 100%); }
 .touch-btn.pause,
 .touch-btn.restart { background: linear-gradient(180deg, #3d4a5c 0%, #2a3542 100%); }
@@ -280,28 +286,28 @@ h1 {
     aspect-ratio: 800 / 480;
     object-fit: contain;
   }
-  /* כפתורים – גודל סביר (לא גדול מדי) */
+  /* כפתורים – קטן פי 2 */
   #touchControls .touch-btn {
-    width: clamp(52px, 8vw, 100px);
-    height: clamp(52px, 8vw, 100px);
-    min-width: clamp(52px, 8vw, 100px);
-    font-size: clamp(1rem, 2.5vw, 1.5rem);
+    width: clamp(26px, 4vw, 50px);
+    height: clamp(26px, 4vw, 50px);
+    min-width: clamp(26px, 4vw, 50px);
+    font-size: clamp(0.6rem, 1.25vw, 0.8rem);
     opacity: 0.4;
-    border-radius: 14px;
+    border-radius: 8px;
     box-shadow: 0 4px 0 #1a2e1a, 0 5px 12px rgba(0,0,0,0.3);
   }
   #touchControls .touch-btn:active { opacity: 0.5; }
   #touchControls .touch-btn.wide {
-    width: clamp(70px, 11vw, 130px);
-    min-width: clamp(70px, 11vw, 130px);
-    font-size: clamp(1rem, 2.5vw, 1.4rem);
+    width: clamp(35px, 5.5vw, 65px);
+    min-width: clamp(35px, 5.5vw, 65px);
+    font-size: clamp(0.6rem, 1.25vw, 0.8rem);
   }
-  #touchControls .touch-btn.jump { font-size: clamp(1rem, 2.5vw, 1.4rem); }
-  #touchControls .touch-btn.fire { font-size: clamp(1.1rem, 2.6vw, 1.5rem); }
+  #touchControls .touch-btn.jump { font-size: clamp(0.6rem, 1.25vw, 0.8rem); }
+  #touchControls .touch-btn.fire { font-size: clamp(0.6rem, 1.3vw, 0.8rem); }
   #touchControls .touch-btn.pause,
-  #touchControls .touch-btn.restart { font-size: clamp(1rem, 2.5vw, 1.4rem); }
-  .touch-row { gap: 8px; margin-bottom: 6px; }
-  .touch-settings { gap: 8px; }
-  .touch-left { gap: 8px; }
-  .touch-right { gap: 8px; }
+  #touchControls .touch-btn.restart { font-size: clamp(0.6rem, 1.25vw, 0.8rem); }
+  .touch-row { gap: 4px; margin-bottom: 4px; }
+  .touch-settings { gap: 6px; }
+  .touch-left { gap: 6px; }
+  .touch-right { gap: 6px; }
 }
