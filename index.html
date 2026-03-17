@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Disco Snail Adventure</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>🐌 Disco Snail Adventure</h1>
+  <div id="gameContainer">
+    <div id="hud">
+      <span>⭐ <span id="score">0</span></span>
+      <span>❤️ <span id="lives">3</span></span>
+      <span>🪙 <span id="coins">0</span></span>
+      <span>🏁 <span id="level">1</span></span>
+      <span id="powerUpDisplay"></span>
+      <div id="oxygenBar">
+        <span class="oxygen-label">🫧 Oxygen</span>
+        <div class="oxygen-fill"><div class="oxygen-fill-inner" style="width:100%"></div></div>
+      </div>
+    </div>
+    <div id="canvasWrapper">
+    <canvas id="gameCanvas" width="800" height="480" tabindex="0"></canvas>
+    <div id="octopusCutscene" class="cutscene-overlay" style="display:none;">
+      <canvas id="octopusCutsceneCanvas" width="800" height="480"></canvas>
+    </div>
+    <div id="touchControls">
+      <div class="touch-left">
+        <div class="touch-row">
+          <button type="button" class="touch-btn jump wide" data-key=" " data-code="Space" title="קפיצה">↑ Jump</button>
+          <button type="button" class="touch-btn fire" data-key="x" data-code="KeyX" title="ירי">X</button>
+        </div>
+        <div class="touch-row">
+          <button type="button" class="touch-btn" data-key="c" data-code="KeyC" title="אבן ענק">⛰️</button>
+          <button type="button" class="touch-btn pause" data-key="p" data-code="KeyP" title="השהה">P</button>
+          <button type="button" class="touch-btn pause" data-key="r" data-code="KeyR" title="התחל מחדש">R</button>
+        </div>
+      </div>
+      <div class="touch-right">
+        <div class="touch-row">
+          <button type="button" class="touch-btn" data-key="ArrowUp" data-code="ArrowUp" title="מעלה">↑</button>
+        </div>
+        <div class="touch-row">
+          <button type="button" class="touch-btn" data-key="ArrowLeft" data-code="ArrowLeft" title="שמאל">←</button>
+          <button type="button" class="touch-btn" data-key="ArrowDown" data-code="ArrowDown" title="מטה">↓</button>
+          <button type="button" class="touch-btn" data-key="ArrowRight" data-code="ArrowRight" title="ימין">→</button>
+        </div>
+      </div>
+    </div>
+    </div>
+  </div>
+  <p id="controls"><span class="key-hint">←→</span> Move | <span class="key-hint">↑↓</span> Pipes | <span class="key-hint">Space</span> Jump | <span class="key-hint">X</span> Fire | <span class="key-hint">C</span> Stone Giant (אבן L5) | <span class="key-hint">P</span> Pause | <span class="key-hint">R</span> Restart</p>
+
+  <script src="js/globals.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/classes.js"></script>
+  <script src="js/levels.js"></script>
+  <script src="js/bosses.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
