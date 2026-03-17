@@ -4,6 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Disco Snail Adventure</title>
+  <!-- Open Graph / Social Media - עדכן og:image ו-og:url לכתובת האתר שלך -->
+  <meta property="og:title" content="Disco Snail Adventure" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="https://alexvsx360.github.io/Disco-Snail/og-image.png" />
+  <meta property="og:url" content="https://alexvsx360.github.io/Disco-Snail/" />
+  <meta property="og:description" content="משחק פלטפורמה דינמי – חלזון דיסקו יוצא להרפתקה! עולמות מרובים, בוסים, כוחות מיוחדים, מוזיקת דיסקו ועוד. שחק בדפדפן!" />
+  <meta property="og:site_name" content="Disco Snail Adventure" />
+  <link rel="icon" type="image/png" href="favicon.png">
   <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -27,6 +35,10 @@
       <canvas id="octopusCutsceneCanvas" width="800" height="480"></canvas>
     </div>
     <div id="touchControls">
+      <div class="touch-settings">
+        <button type="button" class="touch-btn pause" data-key="p" data-code="KeyP" title="השהה">P</button>
+        <button type="button" class="touch-btn restart" data-key="r" data-code="KeyR" title="התחל מחדש">R</button>
+      </div>
       <div class="touch-left">
         <div class="touch-row">
           <button type="button" class="touch-btn jump wide" data-key=" " data-code="Space" title="קפיצה">↑ Jump</button>
@@ -34,8 +46,6 @@
         </div>
         <div class="touch-row">
           <button type="button" class="touch-btn" data-key="c" data-code="KeyC" title="אבן ענק">⛰️</button>
-          <button type="button" class="touch-btn pause" data-key="p" data-code="KeyP" title="השהה">P</button>
-          <button type="button" class="touch-btn pause" data-key="r" data-code="KeyR" title="התחל מחדש">R</button>
         </div>
       </div>
       <div class="touch-right">

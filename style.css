@@ -161,6 +161,7 @@ h1 {
   -webkit-user-select: none;
   pointer-events: none;
 }
+#touchControls .touch-settings,
 #touchControls .touch-left,
 #touchControls .touch-right {
   pointer-events: auto;
@@ -171,7 +172,14 @@ h1 {
     flex-direction: row;
     justify-content: space-between;
     align-items: flex-end;
+    gap: 16px;
   }
+}
+.touch-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
 }
 .touch-left {
   display: flex;
@@ -194,32 +202,33 @@ h1 {
 }
 .touch-row:last-child { margin-bottom: 0; }
 .touch-btn {
-  width: 52px;
-  height: 52px;
-  min-width: 52px;
+  width: 88px;
+  height: 88px;
+  min-width: 88px;
   border: none;
-  border-radius: 12px;
+  border-radius: 16px;
   background: linear-gradient(180deg, #2d5a27 0%, #1e3a2f 100%);
   color: #fff;
-  font-size: 1.4rem;
+  font-size: 1.8rem;
   font-weight: 800;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 0 #1a2e1a, 0 6px 12px rgba(0,0,0,0.4);
+  box-shadow: 0 6px 0 #1a2e1a, 0 8px 16px rgba(0,0,0,0.4);
   transition: transform 0.05s, box-shadow 0.05s;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
 .touch-btn:active {
-  transform: translateY(2px);
-  box-shadow: 0 2px 0 #1a2e1a, 0 4px 8px rgba(0,0,0,0.3);
+  transform: translateY(3px);
+  box-shadow: 0 3px 0 #1a2e1a, 0 5px 10px rgba(0,0,0,0.3);
 }
-.touch-btn.wide { width: 72px; min-width: 72px; }
-.touch-btn.jump { font-size: 1.2rem; background: linear-gradient(180deg, #4a7c59 0%, #2d5a27 100%); }
-.touch-btn.fire { font-size: 1rem; }
-.touch-btn.pause { font-size: 0.9rem; }
+.touch-btn.wide { width: 120px; min-width: 120px; }
+.touch-btn.jump { font-size: 1.5rem; background: linear-gradient(180deg, #4a7c59 0%, #2d5a27 100%); }
+.touch-btn.fire { font-size: 1.4rem; }
+.touch-btn.pause,
+.touch-btn.restart { font-size: 1.3rem; background: linear-gradient(180deg, #3d4a5c 0%, #2a3542 100%); }
 
 @media (max-width: 900px), (hover: none) {
   body {
@@ -261,18 +270,19 @@ h1 {
     object-fit: contain;
   }
   #touchControls .touch-btn {
-    width: 38px;
-    height: 38px;
-    min-width: 38px;
-    font-size: 0.95rem;
+    width: 72px;
+    height: 72px;
+    min-width: 72px;
+    font-size: 1.4rem;
     opacity: 1;
-    border-radius: 8px;
-    box-shadow: 0 2px 0 #1a2e1a, 0 4px 8px rgba(0,0,0,0.3);
+    border-radius: 14px;
+    box-shadow: 0 4px 0 #1a2e1a, 0 6px 12px rgba(0,0,0,0.3);
   }
   #touchControls .touch-btn:active { opacity: 0.85; }
-  #touchControls .touch-btn.wide { width: 48px; min-width: 48px; font-size: 0.8rem; }
-  #touchControls .touch-btn.jump { font-size: 0.85rem; }
-  #touchControls .touch-btn.fire { font-size: 0.8rem; }
-  #touchControls .touch-btn.pause { font-size: 0.75rem; }
-  .touch-row { gap: 6px; margin-bottom: 4px; }
+  #touchControls .touch-btn.wide { width: 96px; min-width: 96px; font-size: 1.2rem; }
+  #touchControls .touch-btn.jump { font-size: 1.2rem; }
+  #touchControls .touch-btn.fire { font-size: 1.2rem; }
+  #touchControls .touch-btn.pause,
+  #touchControls .touch-btn.restart { font-size: 1.2rem; }
+  .touch-row { gap: 10px; margin-bottom: 6px; }
 }
