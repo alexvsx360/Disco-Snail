@@ -28,6 +28,8 @@ function enterBossRoom() {
   bossCutsceneMode = false;
   playSound('boss_intro');
   playSound('pipe');
+  if (typeof stopMapMusic === 'function') stopMapMusic();
+  if (typeof playBossMusic === 'function') setTimeout(playBossMusic, 500);
 }
 
 function enterSpaceBossRoom() {
@@ -54,6 +56,8 @@ function enterSpaceBossRoom() {
   bossCutsceneMode = false;
   playSound('boss_intro');
   playSound('pipe');
+  if (typeof stopMapMusic === 'function') stopMapMusic();
+  if (typeof playBossMusic === 'function') setTimeout(playBossMusic, 500);
 }
 
 function enterCactusBossRoom() {
@@ -82,4 +86,6 @@ function enterCactusBossRoom() {
   bossCutsceneMode = false;
   playSound('boss_intro');
   playSound('pipe');
+  if (typeof stopMapMusic === 'function') stopMapMusic();
+  if (typeof playBossMusic === 'function') setTimeout(playBossMusic, 500);
 }

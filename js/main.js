@@ -9,10 +9,16 @@ transitionManager = new TransitionManager();
         const ob = document.getElementById('oxygenBar');
         if (player) {
           let txt = '';
-          if (player.powerType) txt = (POWER_EMOJI[player.powerType] || '') + ' ' + (player.powerType.charAt(0).toUpperCase() + player.powerType.slice(1)) + ' Lv' + player.powerLevel;
-          else if (player.big) txt = '🍄 Big';
-          if (player.hasMagnet) txt = (txt ? txt + ' | ' : '') + EMOJI.magnet;
-          if (discoBallTimer > 0) txt = (txt ? txt + ' | ' : '') + '🪩 Disco!';
+          if (player.powerType) {
+            txt = (POWER_EMOJI[player.powerType] || '') + ' ' + (player.powerType.charAt(0).toUpperCase() + player.powerType.slice(1)) + ' Lv' + player.powerLevel;
+            if (typeof powerCooldown !== 'undefined' && powerCooldown > 0) txt += ' ⏳';
+          } else if (player.big) txt = '🍄 Big';
+          if (player.hasMagnet) txt = (txt ? txt + ' | ' : '') + (player.hasSuperMagnet ? '🧲+' : EMOJI.magnet);
+          if (player.hasWings) txt = (txt ? txt + ' | ' : '') + (EMOJI.wings || '🪽');
+          if (shieldBonusTimer > 0) txt = (txt ? txt + ' | ' : '') + '🛡️';
+          if (timeShieldTimer > 0) txt = (txt ? txt + ' | ' : '') + '⏱️';
+          if (doubleCoinsTimer > 0) txt = (txt ? txt + ' | ' : '') + '💰x2';
+          if (discoBallTimer > 0) txt = (txt ? txt + ' | ' : '') + '🪩 ' + Math.ceil(discoBallTimer/60) + 's';
           if (inWaterRealm) {
             if (player.oxygen === undefined) player.oxygen = MAX_OXYGEN;
             txt = (txt ? txt + ' | ' : '') + '🫧 ' + Math.ceil(player.oxygen) + '%';
@@ -56,10 +62,14 @@ transitionManager = new TransitionManager();
           discoBallTimer = 0;
           enemiesDanceFromDisco = false;
           stopDiscoMusic();
+          if (typeof stopMapMusic === 'function') stopMapMusic();
+          if (typeof stopBossMusic === 'function') stopBossMusic();
         } else if (discoBallTimer > 0) {
           playDiscoMusic();
         }
         discoRays = [];
+        discoCollectParticles = [];
+        discoCollectFlash = 0;
         windParticles = [];
         lightAuraBursts = [];
         earthCracks = [];
@@ -81,6 +91,10 @@ transitionManager = new TransitionManager();
         lightKillBeams = [];
         voidSuckParticles = [];
         prismLiftBeams = [];
+        shieldBonusTimer = 0;
+        timeShieldTimer = 0;
+        doubleCoinsTimer = 0;
+        enemyTimeSlow = 1;
         celestialGateways = [];
         earthReturnObjects = [];
         inSpaceRealm = false;
@@ -148,6 +162,7 @@ transitionManager = new TransitionManager();
           coins = 0;
           currentLevel = 1;
           levelPowers = {};
+          gameWinLeaderboardShown = false;
         }
         cameraX = 0;
         targetCameraX = 0;
@@ -197,10 +212,12 @@ transitionManager = new TransitionManager();
         }
         if (!urlBoss) {
           if (inSpaceRealm) {
-            for (let i = -1; i <= Math.min(LEVEL_LENGTH, 5); i++) generateSpaceChunk(i);
+            generateSpaceChunk(-1);
+            generateSpaceChunk(0);
             backgroundTrees = [];
           } else {
-            for (let i = -1; i <= Math.min(LEVEL_LENGTH, 5); i++) generateChunk(i);
+            generateChunk(-1);
+            generateChunk(0);
             if (sewerDepth === 0) initTrees();
             else backgroundTrees = [];
           }
@@ -227,9 +244,11 @@ transitionManager = new TransitionManager();
         player.onGround = false;
         player.oxygen = MAX_OXYGEN;
         player.drowning = false;
+        player.oxygenWarnPlayed = false;
         drowningTimer = 0;
         if (typeof sister !== 'undefined' && sister) { sister.x = player.x - 80; sister.y = player.y; }
-        for (let i = -1; i <= 3; i++) generateWaterChunk(i);
+        generateWaterChunk(0);
+        generateWaterChunk(1);
         playSound('water');
       }
 
@@ -258,6 +277,8 @@ transitionManager = new TransitionManager();
         jellyfishBossPhase = 'fight';
         bossCutsceneMode = false;
         playSound('pipe');
+        if (typeof stopMapMusic === 'function') stopMapMusic();
+        if (typeof playBossMusic === 'function') setTimeout(playBossMusic, 500);
       }
 
       function enterSewer(targetDepth) {
@@ -279,7 +300,8 @@ transitionManager = new TransitionManager();
         sewerSpikes = [];
         fireColumns = [];
         generateSewerPipes(sewerDepth);
-        for (let i = 0; i <= 3; i++) generateSewerChunk(sewerDepth, i);
+        generateSewerChunk(sewerDepth, 0);
+        generateSewerChunk(sewerDepth, 1);
       }
 
       function enterBossRoom() {
@@ -310,6 +332,8 @@ transitionManager = new TransitionManager();
         bossSplashParticles = [];
         bossCutsceneMode = false;
         playSound('pipe');
+        if (typeof stopMapMusic === 'function') stopMapMusic();
+        if (typeof playBossMusic === 'function') setTimeout(playBossMusic, 500);
       }
 
       function enterSpaceBossRoom() {
@@ -336,6 +360,8 @@ transitionManager = new TransitionManager();
         spaceBossVictoryDisco = null;
         bossCutsceneMode = false;
         playSound('pipe');
+        if (typeof stopMapMusic === 'function') stopMapMusic();
+        if (typeof playBossMusic === 'function') setTimeout(playBossMusic, 500);
       }
 
       function exitSewer() {
@@ -573,6 +599,7 @@ transitionManager = new TransitionManager();
           p.life--;
           return p.life > 0 && p.y < VIEW_HEIGHT + 30;
         });
+        if (levelWeatherParticles.length > 40) levelWeatherParticles = levelWeatherParticles.slice(-40);
       }
 
       function drawLevelWeatherParticles() {
@@ -591,28 +618,58 @@ transitionManager = new TransitionManager();
             ctx.lineTo(sx - 2, p.y + 12);
             ctx.stroke();
           } else if (p.type === 'snow') {
-            ctx.fillStyle = '#e0f7ff';
-            ctx.font = '14px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('❄', sx, p.y);
+            const gr = ctx.createRadialGradient(sx, p.y, 0, sx, p.y, 6);
+            gr.addColorStop(0, 'rgba(255,255,255,0.9)');
+            gr.addColorStop(0.6, 'rgba(224,247,255,0.6)');
+            gr.addColorStop(1, 'rgba(186,230,253,0)');
+            ctx.fillStyle = gr;
+            ctx.beginPath();
+            ctx.arc(sx, p.y, 5, 0, Math.PI * 2);
+            ctx.fill();
           } else if (p.type === 'wind') {
-            ctx.font = '16px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('💨', sx, p.y);
+            ctx.strokeStyle = 'rgba(148,163,184,0.7)';
+            ctx.lineWidth = 1.5;
+            for (let i = 0; i < 2; i++) {
+              ctx.beginPath();
+              ctx.arc(sx + i * 3, p.y, 4 + i * 2, 0, Math.PI);
+              ctx.stroke();
+            }
           }
           ctx.restore();
         }
       }
 
       document.addEventListener('keydown', function(e) {
+        const lbEl = document.getElementById('leaderboardOverlay');
+        const lbVisible = lbEl && lbEl.style.display === 'flex';
+        const nameInput = document.getElementById('leaderboardName');
+        const focusInInput = nameInput && document.activeElement === nameInput;
+        if (lbVisible) {
+          if ((e.key === 'r' || e.key === 'R' || e.code === 'KeyR') && !focusInInput) {
+            if (typeof hideLeaderboard === 'function') hideLeaderboard();
+            gameState = 'playing';
+            init();
+            initClouds();
+            if (getUrlParam('BOSS') === 'GO') enterBossRoom();
+            else if (typeof playMapMusic === 'function') playMapMusic();
+            if (typeof stopBossMusic === 'function') stopBossMusic();
+            updateHUD();
+            e.preventDefault();
+          }
+          return;
+        }
         keys[e.key] = true;
         if (e.code) keys[e.code] = true;
         if ((e.key === ' ' || e.key === 'Enter') && gameState === 'start') {
           playSound('start');
           gameState = 'playing';
-          init();
+          init(true);
           initClouds();
-          if (getUrlParam('BOSS') === 'GO') enterBossRoom();
+          if (lives <= 0) { gameState = 'gameover'; if (typeof showLeaderboard === 'function') showLeaderboard(score, false); }
+          else {
+            if (getUrlParam('BOSS') === 'GO') enterBossRoom();
+            else if (typeof playMapMusic === 'function') playMapMusic();
+          }
           updateHUD();
           e.preventDefault();
           return;
@@ -627,10 +684,13 @@ transitionManager = new TransitionManager();
         }
         if (e.key === 'r' || e.key === 'R' || e.code === 'KeyR') {
           if (gameState === 'gameover' || gameState === 'playing' || gameState === 'paused' || gameState === 'boss' || gameState === 'space_boss' || gameState === 'cactus_boss' || gameState === 'jellyfish_boss' || gameState === 'bossVictory' || gameState === 'gameWin') {
+            if (typeof hideLeaderboard === 'function') hideLeaderboard();
             gameState = 'playing';
             init();
             initClouds();
             if (getUrlParam('BOSS') === 'GO') enterBossRoom();
+            else if (typeof playMapMusic === 'function') playMapMusic();
+            if (typeof stopBossMusic === 'function') stopBossMusic();
             updateHUD();
             e.preventDefault();
             return;
@@ -643,6 +703,7 @@ transitionManager = new TransitionManager();
           clearMemoryForTransition();
           levelStartTimer = 45;
           init(true);
+          if (typeof playMapMusic === 'function') playMapMusic();
           updateHUD();
         }
         e.preventDefault();
@@ -693,7 +754,16 @@ transitionManager = new TransitionManager();
       initClouds();
       initTrees();
       updateHUD();
-      setInterval(gameLoop, 1000 / 60);
+      const targetFps = 60;
+      let lastTime = performance.now();
+      (function loop(now) {
+        requestAnimationFrame(loop);
+        const elapsed = now - lastTime;
+        if (elapsed >= 1000 / targetFps) {
+          lastTime = now - (elapsed % (1000 / targetFps));
+          gameLoop();
+        }
+      })(performance.now());
       if (canvas) {
         canvas.addEventListener('click', () => canvas.focus());
         canvas.focus();
@@ -706,7 +776,7 @@ transitionManager = new TransitionManager();
         ctx.shadowBlur = 0;
         ctx.shadowColor = 'transparent';
         ctx.filter = 'none';
-        if (screenShake > 0) screenShake--;
+        if (screenShake > 0) { screenShake = Math.min(20, screenShake); screenShake--; }
 
         particles = particles.filter(p => {
           p.x += p.vx;
@@ -733,9 +803,10 @@ transitionManager = new TransitionManager();
         });
 
         /* Aggressive array cleanup - cap at 50 to prevent FPS drops */
-        if (snowParticles.length > 50) snowParticles = snowParticles.slice(-50);
-        if (windParticles.length > 50) windParticles = windParticles.slice(-50);
-        if (voidSuckParticles.length > 50) voidSuckParticles = voidSuckParticles.slice(-50);
+        if (snowParticles.length > 35) snowParticles = snowParticles.slice(-35);
+        if (windParticles.length > 35) windParticles = windParticles.slice(-35);
+        if (voidSuckParticles.length > 40) voidSuckParticles = voidSuckParticles.slice(-40);
+        if (particles.length > 70) particles = particles.slice(-70);
 
         scorePopups = scorePopups.filter(sp => {
           sp.life--;
@@ -744,11 +815,16 @@ transitionManager = new TransitionManager();
             if (sx > -50 && sx < VIEW_WIDTH + 50) {
               ctx.save();
               const alpha = Math.min(1, sp.life / 45);
+              const initLife = sp.initLife || 75;
+              const age = initLife - sp.life;
+              const scale = Math.min(1.25, 0.85 + (age / 12) * 0.4);
               ctx.globalAlpha = alpha;
+              ctx.translate(sx, sp.y - sp.life * 0.5);
+              ctx.scale(scale, scale);
               ctx.font = 'bold 20px Nunito';
-              ctx.fillStyle = '#fff';
+              ctx.fillStyle = sp.color || '#fff';
               ctx.textAlign = 'center';
-              ctx.fillText(sp.text, sx, sp.y - sp.life * 0.5);
+              ctx.fillText(sp.text, 0, 0);
               ctx.restore();
             }
             return true;
@@ -805,73 +881,147 @@ transitionManager = new TransitionManager();
 
         if (gameState === 'start') {
           ctx.globalAlpha = 1;
-          drawBackground();
-          ctx.fillStyle = 'rgba(0,0,0,0.5)';
+          const g = ctx.createLinearGradient(0, 0, 0, VIEW_HEIGHT);
+          const h = (Date.now() * 0.03) % 360;
+          g.addColorStop(0, 'hsl(' + h + ',45%,18%)');
+          g.addColorStop(0.4, 'hsl(' + ((h + 40) % 360) + ',50%,12%)');
+          g.addColorStop(0.7, 'hsl(' + ((h + 80) % 360) + ',55%,8%)');
+          g.addColorStop(1, '#050508');
+          ctx.fillStyle = g;
           ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
-          ctx.fillStyle = '#fff';
-          ctx.font = 'bold 56px Fredoka One';
+          for (let i = 0; i < 24; i++) {
+            const x = (i * 137 + Date.now() * 0.02) % (VIEW_WIDTH + 80) - 40;
+            const y = (i * 89 + Date.now() * 0.015) % (VIEW_HEIGHT + 60) - 30;
+            ctx.globalAlpha = 0.12 + Math.sin(Date.now() * 0.002 + i) * 0.06;
+            ctx.font = (20 + (i % 4) * 8) + 'px sans-serif';
+            ctx.fillText(['🪩','🐌','⭐','💎'][i % 4], x, y);
+          }
+          ctx.globalAlpha = 1;
+          const pulse = 1 + Math.sin(Date.now() * 0.006) * 0.08;
+          ctx.save();
+          ctx.font = 'bold ' + (56 * pulse) + 'px Fredoka One';
           ctx.textAlign = 'center';
-          ctx.fillText('Disco Snail', VIEW_WIDTH / 2, VIEW_HEIGHT / 2 - 40);
-          ctx.font = 'bold 28px Nunito';
-          ctx.fillText('Adventure', VIEW_WIDTH / 2, VIEW_HEIGHT / 2 + 10);
-          ctx.font = '20px Nunito';
+          ctx.textBaseline = 'middle';
+          ctx.shadowColor = 'hsl(' + ((h + 180) % 360) + ',80%,60%)';
+          ctx.shadowBlur = 30;
+          ctx.fillStyle = '#fff';
+          ctx.fillText('Disco Snail', VIEW_WIDTH / 2, VIEW_HEIGHT / 2 - 55);
+          ctx.restore();
+          ctx.save();
+          ctx.font = 'bold 32px Nunito';
+          ctx.fillStyle = 'rgba(255,255,255,0.95)';
+          ctx.shadowColor = '#ff6b9d';
+          ctx.shadowBlur = 15;
+          ctx.fillText('Adventure', VIEW_WIDTH / 2, VIEW_HEIGHT / 2 - 15);
+          ctx.restore();
+          ctx.font = '28px sans-serif';
+          ctx.fillText('🐌 🪩', VIEW_WIDTH / 2, VIEW_HEIGHT / 2 + 25);
+          ctx.font = '18px Nunito';
           ctx.fillStyle = '#ffd700';
-          ctx.fillText('Press SPACE or ENTER to Start', VIEW_WIDTH / 2, VIEW_HEIGHT / 2 + 80);
-          ctx.fillStyle = 'rgba(255,255,255,0.7)';
-          ctx.fillText('High Score: ' + highScore, VIEW_WIDTH / 2, VIEW_HEIGHT / 2 + 120);
+          ctx.shadowBlur = 0;
+          const blink = Math.floor(Date.now() / 500) % 2;
+          ctx.globalAlpha = blink ? 1 : 0.7;
+          ctx.fillText('Press SPACE or ENTER to Start', VIEW_WIDTH / 2, VIEW_HEIGHT / 2 + 75);
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = 'rgba(255,255,255,0.8)';
+          ctx.font = '20px Nunito';
+          ctx.fillText('High Score: ' + highScore, VIEW_WIDTH / 2, VIEW_HEIGHT / 2 + 110);
+          ctx.font = '14px Nunito';
+          ctx.fillStyle = 'rgba(255,255,255,0.5)';
+          ctx.fillText('← → Move  |  Space Jump  |  X Fire  |  P Pause', VIEW_WIDTH / 2, VIEW_HEIGHT / 2 + 145);
+          const snailX = VIEW_WIDTH/2 + Math.sin(Date.now() * 0.002) * 60;
+          const snailY = VIEW_HEIGHT - 100 + Math.sin(Date.now() * 0.003) * 8;
+          ctx.save();
+          ctx.font = '48px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.shadowColor = '#ff6b9d';
+          ctx.shadowBlur = 20;
+          ctx.fillText('🐌', snailX, snailY);
+          ctx.restore();
           return;
         }
 
         if (gameState === 'paused') {
           ctx.globalAlpha = 1;
-          ctx.fillStyle = 'rgba(0,0,0,0.6)';
+          ctx.filter = 'blur(2px)';
+          drawBackground();
+          ctx.filter = 'none';
+          ctx.fillStyle = 'rgba(0,0,0,0.52)';
           ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+          ctx.save();
+          ctx.shadowColor = '#94a3b8';
+          ctx.shadowBlur = 18;
           ctx.fillStyle = '#fff';
           ctx.font = 'bold 48px Fredoka One';
           ctx.textAlign = 'center';
           ctx.fillText('PAUSED', VIEW_WIDTH / 2, VIEW_HEIGHT / 2 - 20);
+          ctx.restore();
           ctx.font = '20px Nunito';
-          ctx.fillText('Press P to Resume', VIEW_WIDTH / 2, VIEW_HEIGHT / 2 + 30);
+          const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+          ctx.fillText(isTouch ? 'Tap P to Resume' : 'Press P to Resume', VIEW_WIDTH / 2, VIEW_HEIGHT / 2 + 30);
           return;
         }
 
         if (gameState === 'gameover') {
           ctx.globalAlpha = 1;
           drawBackground();
-          ctx.fillStyle = 'rgba(0,0,0,0.75)';
+          if (score >= highScore && score > 0 && Math.floor(Date.now() / 100) % 4 < 2) {
+            addParticles(VIEW_WIDTH/2, VIEW_HEIGHT/2 + 40, 2, '#ffd700');
+          }
+          ctx.fillStyle = 'rgba(0,0,0,0.72)';
           ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+          ctx.save();
+          ctx.shadowColor = '#ff6b6b';
+          ctx.shadowBlur = 25;
           ctx.fillStyle = '#ff6b6b';
           ctx.font = 'bold 52px Fredoka One';
           ctx.textAlign = 'center';
           ctx.fillText('GAME OVER', VIEW_WIDTH / 2, VIEW_HEIGHT / 2 - 40);
+          ctx.restore();
           ctx.fillStyle = '#fff';
           ctx.font = '24px Nunito';
           ctx.fillText('Score: ' + score, VIEW_WIDTH / 2, VIEW_HEIGHT / 2 + 10);
           if (score >= highScore && score > 0) {
+            const pulse = 1 + Math.sin(Date.now() * 0.008) * 0.12;
+            ctx.save();
+            ctx.translate(VIEW_WIDTH / 2, VIEW_HEIGHT / 2 + 50);
+            ctx.scale(pulse, pulse);
             ctx.fillStyle = '#ffd700';
-            ctx.fillText('★ NEW HIGH SCORE! ★', VIEW_WIDTH / 2, VIEW_HEIGHT / 2 + 50);
+            ctx.font = '24px Nunito';
+            ctx.textAlign = 'center';
+            ctx.fillText('★ NEW HIGH SCORE! ★', 0, 0);
+            ctx.restore();
           }
           ctx.fillStyle = '#ffd700';
           ctx.font = '20px Nunito';
-          ctx.fillText('Press R to Restart', VIEW_WIDTH / 2, VIEW_HEIGHT / 2 + 90);
+          const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+          ctx.fillText(isTouch ? 'Tap R to Restart' : 'Press R to Restart', VIEW_WIDTH / 2, VIEW_HEIGHT / 2 + 90);
           return;
         }
 
         if (gameState === 'levelcomplete') {
           ctx.globalAlpha = 1;
+          ctx.filter = 'blur(1px)';
           drawBackground();
-          ctx.fillStyle = 'rgba(0,0,0,0.6)';
+          ctx.filter = 'none';
+          ctx.fillStyle = 'rgba(0,0,0,0.5)';
           ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+          ctx.save();
+          ctx.shadowColor = '#4ade80';
+          ctx.shadowBlur = 20;
           ctx.fillStyle = '#4ade80';
           ctx.font = 'bold 44px Fredoka One';
           ctx.textAlign = 'center';
           ctx.fillText('LEVEL ' + currentLevel + ' COMPLETE!', VIEW_WIDTH / 2, VIEW_HEIGHT / 2 - 50);
+          ctx.restore();
           ctx.fillStyle = '#fff';
           ctx.font = '22px Nunito';
           ctx.fillText('Score: ' + score + '  •  Coins: ' + coins, VIEW_WIDTH / 2, VIEW_HEIGHT / 2);
           ctx.fillStyle = '#ffd700';
           ctx.font = '20px Nunito';
-          ctx.fillText('Press SPACE for Next Level', VIEW_WIDTH / 2, VIEW_HEIGHT / 2 + 50);
+          const isTouchLc = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+          ctx.fillText(isTouchLc ? 'Tap SPACE for Next Level' : 'Press SPACE for Next Level', VIEW_WIDTH / 2, VIEW_HEIGHT / 2 + 50);
           return;
         }
 
@@ -905,11 +1055,11 @@ transitionManager = new TransitionManager();
           player.x = Math.max(0, Math.min(VIEW_WIDTH - player.width, player.x));
           let landed = false;
           for (const p of bossPlatforms) {
-            const overlapX = player.x + player.width > p.x + 2 && player.x < p.x + p.width - 2;
+            const overlapX = player.x + player.width > p.x + 4 && player.x < p.x + p.width - 4;
             if (player.vy > 0 && overlapX) {
               const prevBottom = player.y + player.height - player.vy;
               const currBottom = player.y + player.height;
-              if (prevBottom <= p.y + 8 && currBottom >= p.y - 4) {
+              if (prevBottom <= p.y + 12 && currBottom >= p.y - 6) {
                 if (!player.onGround && player.vy > 2) addLandingDust(player.x + player.width/2, player.y + player.height);
                 player.y = p.y - player.height;
                 player.vy = 0;
@@ -1010,7 +1160,10 @@ transitionManager = new TransitionManager();
                 });
               }
             } else if (overlapX && player.vy <= 0 && currBottom > m.y + 4 && checkPlayerDamageCollision(player, m)) {
-              if (invincibleTimer <= 0 && stoneGiantTimer <= 0) player.die();
+              if (invincibleTimer <= 0 && stoneGiantTimer <= 0) {
+                if (player.big) { player.big = false; player.height = 40; invincibleTimer = 120; playSound('brick'); addParticles(player.x + player.width/2, player.y + player.height/2, 6, '#ff6b9d'); }
+                else player.die();
+              }
             }
           }
           if ((bossPhase === 'dance' || bossPhase === 'falling' || bossPhase === 'burning' || bossPhase === 'discoSpawn') &&
@@ -1107,6 +1260,7 @@ transitionManager = new TransitionManager();
             const dist = Math.sqrt(dx * dx + dy * dy);
             if (dist < 30) {
               bossVictoryDisco.collected = true;
+              if (typeof playVictoryMusic === 'function') playVictoryMusic();
               showStoryScreen(['The underground empire is blinded by the lights!', 'The surface awaits...'], () => { playSound('levelComplete'); gameState = 'gameWin'; });
             }
           }
@@ -1240,10 +1394,16 @@ transitionManager = new TransitionManager();
           if (bossPhase === 'burning') {
             ctx.save();
             ctx.globalAlpha = 0.5 + (bossBurnTimer / 90) * 0.5;
-            ctx.font = '72px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('🔥', bossFallX, BOSS_GROUND + 75);
+            const by = BOSS_GROUND + 75;
+            const gr = ctx.createRadialGradient(bossFallX, by - 25, 0, bossFallX, by, 50);
+            gr.addColorStop(0, 'rgba(255,220,150,0.9)');
+            gr.addColorStop(0.4, 'rgba(249,115,22,0.7)');
+            gr.addColorStop(0.8, 'rgba(234,88,12,0.3)');
+            gr.addColorStop(1, 'rgba(234,88,12,0)');
+            ctx.fillStyle = gr;
+            ctx.beginPath();
+            ctx.ellipse(bossFallX, by, 28, 45, 0, 0, Math.PI * 2);
+            ctx.fill();
             ctx.restore();
           }
           if (bossPhase === 'discoSpawn' && bossVictoryDisco && !bossVictoryDisco.collected) {
@@ -1304,11 +1464,11 @@ transitionManager = new TransitionManager();
           let landed = false;
           const sortedPlatforms = [...bossPlatforms].sort((a, b) => a.y - b.y);
           for (const p of sortedPlatforms) {
-            const overlapX = player.x + player.width > p.x + 2 && player.x < p.x + p.width - 2;
+            const overlapX = player.x + player.width > p.x + 4 && player.x < p.x + p.width - 4;
             if (player.vy > 0 && overlapX) {
               const prevBottom = player.y + player.height - player.vy;
               const currBottom = player.y + player.height;
-              if (prevBottom <= p.y + 8 && currBottom >= p.y - 4) {
+              if (prevBottom <= p.y + 12 && currBottom >= p.y - 6) {
                 if (!player.onGround && player.vy > 2) addLandingDust(player.x + player.width/2, player.y + player.height);
                 player.y = p.y - player.height;
                 player.vy = 0;
@@ -1435,7 +1595,8 @@ transitionManager = new TransitionManager();
                 });
               }
             } else if (overlapX && player.vy <= 0 && currBottom > m.y + 4 && invincibleTimer <= 0 && checkPlayerDamageCollision(player, m)) {
-              player.die();
+              if (player.big) { player.big = false; player.height = 40; invincibleTimer = 120; playSound('brick'); addParticles(player.x + player.width/2, player.y + player.height/2, 6, '#ff6b9d'); }
+              else player.die();
             }
           }
           spaceBossMinions = spaceBossMinions.filter(m => m.alive);
@@ -1448,13 +1609,13 @@ transitionManager = new TransitionManager();
             const lv = player.powerLevel;
             const maxProj = Math.min(8, 2 + lv);
             if (powerProjectiles.length < maxProj) {
-              const angles = (player.powerType === 'fire' && lv >= 5) ? [-90,-45,0,45,90] : (player.powerType === 'fire' && lv >= 4) ? [-30,0,30] : (player.powerType === 'fire' && lv >= 3) ? [0] : (player.powerType === 'earth' && lv >= 4) ? [-15,15] : (player.powerType === 'water' && lv >= 4) ? [-25,0,25] : (player.powerType === 'wind' && lv >= 5) ? [-60,-30,0,30,60] : (player.powerType === 'wind' && lv >= 4) ? [-30,0,30] : (player.powerType === 'ice' && lv >= 5) ? [-45,-22,0,22,45] : (player.powerType === 'ice' && lv >= 4) ? [-20,0,20] : (player.powerType === 'lightning' && lv >= 5) ? [-30,-15,0,15,30] : (player.powerType === 'lightning' && lv >= 4) ? [-15,0,15] : (player.powerType === 'nature' && lv >= 5) ? [-40,-20,0,20,40] : (player.powerType === 'nature' && lv >= 4) ? [-25,0,25] : (player.powerType === 'stone' && lv >= 5) ? [-25,-10,10,25] : (player.powerType === 'stone' && lv >= 4) ? [-10,10] : (player.powerType === 'shadow' && lv >= 5) ? [-35,-15,0,15,35] : (player.powerType === 'shadow' && lv >= 4) ? [-20,0,20] : (player.powerType === 'light' && lv >= 5) ? [-50,-25,0,25,50] : (player.powerType === 'light' && lv >= 4) ? [-30,0,30] : (player.powerType === 'time' && lv >= 4) ? [-20,0,20] : (player.powerType === 'vortex' && lv >= 4) ? [-25,-10,10,25] : (player.powerType === 'toxic' && lv >= 4) ? [-30,0,30] : (player.powerType === 'phantom' && lv >= 4) ? [-25,0,25] : (player.powerType === 'sound' && lv >= 4) ? [-35,-15,0,15,35] : (player.powerType === 'prism' && lv >= 4) ? [-15,15] : (player.powerType === 'plasma' && lv >= 4) ? [-30,0,30] : (player.powerType === 'meteor' && lv >= 4) ? [-20,-10,0,10,20] : (player.powerType === 'void' && lv >= 4) ? [-25,0,25] : (player.powerType === 'beam' && lv >= 4) ? [-20,0,20] : [0];
+              const angles = (player.powerType === 'fire' && lv >= 5) ? [-90,-45,0,45,90] : (player.powerType === 'fire' && lv >= 4) ? [-30,0,30] : (player.powerType === 'fire' && lv >= 3) ? [0] : (player.powerType === 'earth' && lv >= 4) ? [-15,15] : (player.powerType === 'earth' && lv >= 3) ? [0] : (player.powerType === 'water' && lv >= 4) ? [-25,0,25] : (player.powerType === 'wind' && lv >= 5) ? [-60,-30,0,30,60] : (player.powerType === 'wind' && lv >= 4) ? [-30,0,30] : (player.powerType === 'ice' && lv >= 5) ? [-45,-22,0,22,45] : (player.powerType === 'ice' && lv >= 4) ? [-20,0,20] : (player.powerType === 'lightning' && lv >= 5) ? [-30,-15,0,15,30] : (player.powerType === 'lightning' && lv >= 4) ? [-15,0,15] : (player.powerType === 'nature' && lv >= 5) ? [-40,-20,0,20,40] : (player.powerType === 'nature' && lv >= 4) ? [-25,0,25] : (player.powerType === 'stone' && lv >= 5) ? [-25,-10,10,25] : (player.powerType === 'stone' && lv >= 4) ? [-10,10] : (player.powerType === 'shadow' && lv >= 5) ? [-35,-15,0,15,35] : (player.powerType === 'shadow' && lv >= 4) ? [-20,0,20] : (player.powerType === 'light' && lv >= 5) ? [-50,-25,0,25,50] : (player.powerType === 'light' && lv >= 4) ? [-30,0,30] : (player.powerType === 'time' && lv >= 4) ? [-20,0,20] : (player.powerType === 'time' && lv >= 3) ? [0] : (player.powerType === 'vortex' && lv >= 4) ? [-25,-10,10,25] : (player.powerType === 'toxic' && lv >= 4) ? [-30,0,30] : (player.powerType === 'phantom' && lv >= 4) ? [-25,0,25] : (player.powerType === 'sound' && lv >= 4) ? [-35,-15,0,15,35] : (player.powerType === 'prism' && lv >= 4) ? [-15,15] : (player.powerType === 'plasma' && lv >= 4) ? [-30,0,30] : (player.powerType === 'meteor' && lv >= 4) ? [-20,-10,0,10,20] : (player.powerType === 'void' && lv >= 4) ? [-25,0,25] : (player.powerType === 'beam' && lv >= 4) ? [-20,0,20] : [0];
               for (const ang of angles) {
                 if (powerProjectiles.length < maxProj) {
                   powerProjectiles.push(new PowerProjectile(px, py, player.powerType, lv, right, ang));
                 }
               }
-              powerCooldown = Math.max(8, 20 - lv * 3);
+              powerCooldown = Math.max(5, 16 - lv * 2);
               playSound(POWER_SOUND[player.powerType] || 'fire');
             }
           }
@@ -1561,6 +1722,7 @@ transitionManager = new TransitionManager();
                 spaceBossVictoryDisco.collected = true;
                 gameState = 'bossVictory';
                 bossVictoryTimer = 180 * 60;
+                if (typeof playVictoryMusic === 'function') playVictoryMusic();
               }
             }
           }
@@ -1846,13 +2008,13 @@ transitionManager = new TransitionManager();
             const lv = player.powerLevel;
             const maxProj = Math.min(8, 2 + lv);
             if (powerProjectiles.length < maxProj) {
-              const angles = (player.powerType === 'fire' && lv >= 5) ? [-90,-45,0,45,90] : (player.powerType === 'fire' && lv >= 4) ? [-30,0,30] : (player.powerType === 'fire' && lv >= 3) ? [0] : (player.powerType === 'earth' && lv >= 4) ? [-15,15] : (player.powerType === 'water' && lv >= 4) ? [-25,0,25] : (player.powerType === 'wind' && lv >= 5) ? [-60,-30,0,30,60] : (player.powerType === 'wind' && lv >= 4) ? [-30,0,30] : (player.powerType === 'ice' && lv >= 5) ? [-45,-22,0,22,45] : (player.powerType === 'ice' && lv >= 4) ? [-20,0,20] : (player.powerType === 'lightning' && lv >= 5) ? [-30,-15,0,15,30] : (player.powerType === 'lightning' && lv >= 4) ? [-15,0,15] : (player.powerType === 'nature' && lv >= 5) ? [-40,-20,0,20,40] : (player.powerType === 'nature' && lv >= 4) ? [-25,0,25] : (player.powerType === 'stone' && lv >= 5) ? [-25,-10,10,25] : (player.powerType === 'stone' && lv >= 4) ? [-10,10] : (player.powerType === 'shadow' && lv >= 5) ? [-35,-15,0,15,35] : (player.powerType === 'shadow' && lv >= 4) ? [-20,0,20] : (player.powerType === 'light' && lv >= 5) ? [-50,-25,0,25,50] : (player.powerType === 'light' && lv >= 4) ? [-30,0,30] : (player.powerType === 'time' && lv >= 4) ? [-20,0,20] : (player.powerType === 'vortex' && lv >= 4) ? [-25,-10,10,25] : (player.powerType === 'toxic' && lv >= 4) ? [-30,0,30] : (player.powerType === 'phantom' && lv >= 4) ? [-25,0,25] : (player.powerType === 'sound' && lv >= 4) ? [-35,-15,0,15,35] : (player.powerType === 'prism' && lv >= 4) ? [-15,15] : (player.powerType === 'plasma' && lv >= 4) ? [-30,0,30] : (player.powerType === 'meteor' && lv >= 4) ? [-20,-10,0,10,20] : (player.powerType === 'void' && lv >= 4) ? [-25,0,25] : (player.powerType === 'beam' && lv >= 4) ? [-20,0,20] : [0];
+              const angles = (player.powerType === 'fire' && lv >= 5) ? [-90,-45,0,45,90] : (player.powerType === 'fire' && lv >= 4) ? [-30,0,30] : (player.powerType === 'fire' && lv >= 3) ? [0] : (player.powerType === 'earth' && lv >= 4) ? [-15,15] : (player.powerType === 'earth' && lv >= 3) ? [0] : (player.powerType === 'water' && lv >= 4) ? [-25,0,25] : (player.powerType === 'wind' && lv >= 5) ? [-60,-30,0,30,60] : (player.powerType === 'wind' && lv >= 4) ? [-30,0,30] : (player.powerType === 'ice' && lv >= 5) ? [-45,-22,0,22,45] : (player.powerType === 'ice' && lv >= 4) ? [-20,0,20] : (player.powerType === 'lightning' && lv >= 5) ? [-30,-15,0,15,30] : (player.powerType === 'lightning' && lv >= 4) ? [-15,0,15] : (player.powerType === 'nature' && lv >= 5) ? [-40,-20,0,20,40] : (player.powerType === 'nature' && lv >= 4) ? [-25,0,25] : (player.powerType === 'stone' && lv >= 5) ? [-25,-10,10,25] : (player.powerType === 'stone' && lv >= 4) ? [-10,10] : (player.powerType === 'shadow' && lv >= 5) ? [-35,-15,0,15,35] : (player.powerType === 'shadow' && lv >= 4) ? [-20,0,20] : (player.powerType === 'light' && lv >= 5) ? [-50,-25,0,25,50] : (player.powerType === 'light' && lv >= 4) ? [-30,0,30] : (player.powerType === 'time' && lv >= 4) ? [-20,0,20] : (player.powerType === 'time' && lv >= 3) ? [0] : (player.powerType === 'vortex' && lv >= 4) ? [-25,-10,10,25] : (player.powerType === 'toxic' && lv >= 4) ? [-30,0,30] : (player.powerType === 'phantom' && lv >= 4) ? [-25,0,25] : (player.powerType === 'sound' && lv >= 4) ? [-35,-15,0,15,35] : (player.powerType === 'prism' && lv >= 4) ? [-15,15] : (player.powerType === 'plasma' && lv >= 4) ? [-30,0,30] : (player.powerType === 'meteor' && lv >= 4) ? [-20,-10,0,10,20] : (player.powerType === 'void' && lv >= 4) ? [-25,0,25] : (player.powerType === 'beam' && lv >= 4) ? [-20,0,20] : [0];
               for (const ang of angles) {
                 if (powerProjectiles.length < maxProj) {
                   powerProjectiles.push(new PowerProjectile(px, py, player.powerType, lv, right, ang));
                 }
               }
-              powerCooldown = Math.max(8, 20 - lv * 3);
+              powerCooldown = Math.max(5, 16 - lv * 2);
               playSound(POWER_SOUND[player.powerType] || 'fire');
             }
           }
@@ -1965,6 +2127,7 @@ transitionManager = new TransitionManager();
               if (princessSnail.syncedJump > 90) {
                 gameState = 'bossVictory';
                 bossVictoryTimer = 180 * 60;
+                if (typeof playVictoryMusic === 'function') playVictoryMusic();
               }
             }
           }
@@ -2195,7 +2358,10 @@ transitionManager = new TransitionManager();
             m.y += m.vy;
             if (m.y > VIEW_HEIGHT + 20 || m.x < -30 || m.x > VIEW_WIDTH + 30) m.alive = false;
             const hit = player.x + player.width > m.x + 4 && player.x < m.x + m.w - 4 && player.y + player.height > m.y && player.y < m.y + m.h;
-            if (hit && invincibleTimer <= 0) player.die();
+            if (hit && invincibleTimer <= 0) {
+              if (player.big) { player.big = false; player.height = 40; invincibleTimer = 120; playSound('brick'); addParticles(player.x + player.width/2, player.y + player.height/2, 6, '#ff6b9d'); }
+              else player.die();
+            }
           }
           jellyfishMinions = jellyfishMinions.filter(m => m.alive);
 
@@ -2214,7 +2380,7 @@ transitionManager = new TransitionManager();
                   powerProjectiles.push(new PowerProjectile(px, py, player.powerType, lv, right, ang));
                 }
               }
-              powerCooldown = Math.max(8, 20 - lv * 3);
+              powerCooldown = Math.max(5, 16 - lv * 2);
               playSound(POWER_SOUND[player.powerType] || 'fire');
             }
           }
@@ -2363,6 +2529,7 @@ transitionManager = new TransitionManager();
                 gameState = 'bossVictory';
                 bossVictoryTimer = 180;
                 jellyfishOctopus = null;
+                if (typeof playVictoryMusic === 'function') playVictoryMusic();
                 princessSnail = { x: 400, y: 320, dancePhase: 0 };
               }
             }
@@ -2551,6 +2718,7 @@ transitionManager = new TransitionManager();
           bossVictoryTimer--;
           if (bossVictoryTimer <= 0) {
             gameState = 'gameWin';
+            if (typeof playVictoryMusic === 'function') playVictoryMusic();
             playSound('levelComplete');
             stopDiscoMusic();
           }
@@ -2605,6 +2773,10 @@ transitionManager = new TransitionManager();
         }
 
         if (gameState === 'gameWin') {
+          if (typeof gameWinLeaderboardShown === 'undefined' || !gameWinLeaderboardShown) {
+            gameWinLeaderboardShown = true;
+            if (typeof showLeaderboard === 'function') showLeaderboard(score, true);
+          }
           ctx.globalAlpha = 1;
           ctx.fillStyle = '#0a0a1a';
           ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
@@ -2626,6 +2798,7 @@ transitionManager = new TransitionManager();
           ctx.font = '20px Nunito';
           ctx.fillText('Press SPACE or R to Play Again', VIEW_WIDTH / 2, VIEW_HEIGHT / 2 + 100);
           if (keys[' '] || keys['r'] || keys['R']) {
+            if (typeof hideLeaderboard === 'function') hideLeaderboard();
             gameState = 'playing';
             init();
             initClouds();
@@ -2635,6 +2808,10 @@ transitionManager = new TransitionManager();
         }
 
         if (gameState === 'playing') {
+          if (shieldBonusTimer > 0) { invincibleTimer = Math.max(invincibleTimer, 2); shieldBonusTimer--; }
+          if (timeShieldTimer > 0) { enemyTimeSlow = 0.42; timeShieldTimer--; } else { enemyTimeSlow = 1; }
+          if (!(typeof transitionManager !== 'undefined' && transitionManager && transitionManager.state === 'transition')) globalGameSpeed = 1;
+          if (doubleCoinsTimer > 0) doubleCoinsTimer--;
           updateHUD();
           if (levelStartTimer > 0) {
             levelStartTimer--;
@@ -2671,26 +2848,34 @@ transitionManager = new TransitionManager();
           if (inWaterRealm) {
             const currentChunk = Math.floor(cameraX / (CHUNK_WIDTH * TILE_SIZE));
             const maxChunk = Math.floor(WATER_WIDTH / (CHUNK_WIDTH * TILE_SIZE)) - 1;
-            for (let i = Math.max(-1, currentChunk - 1); i <= Math.min(maxChunk, currentChunk + 3); i++) {
-              generateWaterChunk(i);
+            const ahead = 2;
+            let generated = 0;
+            for (let i = Math.max(-1, currentChunk - 1); i <= Math.min(maxChunk, currentChunk + ahead) && generated < 2; i++) {
+              if (!waterChunks['w_' + i]) { generateWaterChunk(i); generated++; }
             }
           } else if (sewerDepth === 0 && !inSpaceRealm) {
             const currentChunk = Math.floor(cameraX / (CHUNK_WIDTH * TILE_SIZE));
             const maxChunk = Math.floor((LEVEL_LENGTH * CHUNK_WIDTH * TILE_SIZE) / (CHUNK_WIDTH * TILE_SIZE)) - 1;
-            for (let i = Math.max(-1, currentChunk - 1); i <= Math.min(maxChunk, currentChunk + 3); i++) {
-              generateChunk(i);
+            const ahead = 2;
+            let generated = 0;
+            for (let i = Math.max(-1, currentChunk - 1); i <= Math.min(maxChunk, currentChunk + ahead) && generated < 2; i++) {
+              if (!chunks[i]) { generateChunk(i); if (typeof addTreesForChunk === 'function') addTreesForChunk(i); generated++; }
             }
             for (const gw of celestialGateways) gw.update();
           } else if (inSpaceRealm) {
-            const levelW = LEVEL_LENGTH * CHUNK_WIDTH * TILE_SIZE;
             const currentChunk = Math.floor(cameraX / (CHUNK_WIDTH * TILE_SIZE));
-            for (let i = Math.max(-1, currentChunk - 1); i <= currentChunk + 3; i++) {
-              generateSpaceChunk(i);
+            const ahead = 2;
+            let generated = 0;
+            for (let i = Math.max(-1, currentChunk - 1); i <= currentChunk + ahead && generated < 2; i++) {
+              if (!chunks[i]) { generateSpaceChunk(i); generated++; }
             }
           } else {
             const sewerChunkIdx = Math.floor(cameraX / (CHUNK_WIDTH * TILE_SIZE));
-            for (let i = Math.max(0, sewerChunkIdx - 1); i <= Math.min(SEWER_LENGTH - 1, sewerChunkIdx + 3); i++) {
-              generateSewerChunk(sewerDepth, i);
+            const ahead = 2;
+            let generated = 0;
+            for (let i = Math.max(0, sewerChunkIdx - 1); i <= Math.min(SEWER_LENGTH - 1, sewerChunkIdx + ahead) && generated < 2; i++) {
+              const key = sewerDepth + '_' + i;
+              if (!sewerChunks[key]) { generateSewerChunk(sewerDepth, i); generated++; }
             }
           }
 
@@ -2726,7 +2911,7 @@ transitionManager = new TransitionManager();
                 const dist = Math.abs((player.x + player.width/2) - (gw.x + gw.width/2));
                 if (dist < 100) {
                   planetHumTimer = (planetHumTimer || 0) + 1;
-                  if (planetHumTimer === 1 || planetHumTimer % 180 === 0) playSound('planet_hum');
+                  if (planetHumTimer === 1 || planetHumTimer % 180 === 0) playSound('planet_hum', 0.15);
                 } else planetHumTimer = 0;
                 const onPlanet = player.x + player.width > gw.x + 8 && player.x < gw.x + gw.width - 8 &&
                   player.y + player.height >= gw.y + gw.height - 25;
@@ -2736,7 +2921,7 @@ transitionManager = new TransitionManager();
                   pipeEnterCooldown = 30;
                   savedOverworldX = player.x;
                   transitionManager.start(true);
-                  playSound('planet_hum');
+                  playSound('planet_hum', 0.15);
                   break;
                 }
               }
@@ -2750,7 +2935,7 @@ transitionManager = new TransitionManager();
                   clearMemoryForTransition();
                   pipeEnterCooldown = 30;
                   transitionManager.start(false);
-                  playSound('planet_hum');
+                  playSound('planet_hum', 0.15);
                   break;
                 }
               }
@@ -2942,6 +3127,11 @@ transitionManager = new TransitionManager();
                 if (Math.floor(Date.now()/80) % 3 === 0) addParticles(c.x + c.w/2, c.y + c.h * 0.3, 3, '#a5f3fc', EMOJI.bubbles || '🫧');
               }
             }
+            if (player.oxygen < MAX_OXYGEN * 0.25 && !player.oxygenWarnPlayed) {
+              playSound('drowning');
+              player.oxygenWarnPlayed = true;
+            }
+            if (player.oxygen > MAX_OXYGEN * 0.35) player.oxygenWarnPlayed = false;
             if (player.oxygen <= 0) {
               player.drowning = true;
               drowningTimer = 0;
@@ -3001,17 +3191,17 @@ transitionManager = new TransitionManager();
           let landed = false;
 
           for (const p of platforms) {
-            const overlapX = player.x + player.width > p.x + 2 && player.x < p.x + p.width - 2;
+            const overlapX = player.x + player.width > p.x + 4 && player.x < p.x + p.width - 4;
             const hittable = (p.type === 'question' || p.type === 'brick');
             if (player.vy < 0 && overlapX && hittable) {
               const prevTop = player.y - player.vy;
               const currTop = player.y;
               if (prevTop >= p.y + p.height - 4 && currTop <= p.y + p.height + 8) {
                 player.y = p.y + p.height;
-                player.vy = 5;
+                player.vy = 4;
                 p.bounceOffset = 4;
                 if (p.type === 'brick') {
-                  addParticles(p.x + p.width/2, p.y + p.height/2, 12, p.spaceStyle ? '#94a3b8' : '#78716c');
+                  addParticles(p.x + p.width/2, p.y + p.height/2, 8, p.spaceStyle ? '#94a3b8' : '#78716c');
                   playSound('brick');
                   p.broken = true;
                   removePlatformFromChunks(p);
@@ -3023,32 +3213,40 @@ transitionManager = new TransitionManager();
                   if (reward === 'random') {
                     const r = Math.random();
                     if (r < 0.005) reward = 'disco';           /* 0.5% - ממש נדיר */
-                    else if (r < 0.025) reward = '1up';        /* 2% */
-                    else if (r < 0.075) reward = 'super';      /* 5% */
-                    else if (r < 0.255) reward = getLevelPower(); /* 18% כוח - כוח אחד אקראי לכל שלב */
-                    else reward = 'coin';                       /* ~74.5% מטבעות */
+                    else if (r < 0.012) reward = 'wings';      /* 0.7% - כנפיים */
+                    else if (r < 0.022) reward = 'shield';    /* 1% - מגן */
+                    else if (r < 0.032) reward = 'timeShield'; /* 1% - האטת זמן */
+                    else if (r < 0.042) reward = 'superMagnet'; /* 1% - מגנט סופר */
+                    else if (r < 0.052) reward = 'doubleCoins'; /* 1% - מטבעות כפולים */
+                    else if (r < 0.062) reward = 'extraLife';   /* 1% - חיים נוספים */
+                    else if (r < 0.082) reward = '1up';        /* 2% */
+                    else if (r < 0.122) reward = 'super';     /* 5% */
+                    else if (r < 0.292) reward = getLevelPower(); /* 17% כוח */
+                    else reward = 'coin';                     /* ~70.8% מטבעות */
                   }
-                  if (reward === 'disco') {
-                    const discoItem = new BonusItem(p.x + (p.width - 28) / 2, p.y - 32, 'disco');
+                  const BONUS_ITEM_TYPES = ['disco','wings','shield','timeShield','superMagnet','doubleCoins','extraLife'];
+                  if (BONUS_ITEM_TYPES.includes(reward)) {
+                    const bonusItem = new BonusItem(p.x + (p.width - 28) / 2, p.y - 32, reward);
                     const cIdx = Math.floor(p.x / (CHUNK_WIDTH * TILE_SIZE));
                     if (inWaterRealm && typeof waterChunks !== 'undefined') {
                       const key = 'w_' + cIdx;
                       if (!waterChunks[key]) waterChunks[key] = [];
-                      waterChunks[key].push(discoItem);
+                      waterChunks[key].push(bonusItem);
                     } else {
                       if (!chunks[cIdx]) chunks[cIdx] = [];
-                      chunks[cIdx].push(discoItem);
+                      chunks[cIdx].push(bonusItem);
                     }
                   } else if (reward === 'super' || reward === '1up' || POWER_TYPES.includes(reward)) {
                     playSound('powerup_spawn');
                     powerUps.push(new PowerUp(p.x + (p.width - 28) / 2, p.y - 28, reward, player.facingRight));
                   } else {
                     const coinCount = 1 + rand(0, 2);
+                    const mult = doubleCoinsTimer > 0 ? 2 : 1;
                     for (let i = 0; i < coinCount; i++) {
-                      coins++;
-                      score += 50;
+                      coins += mult;
+                      score += 50 * mult;
                       playSound('coin');
-                      addScorePopup(p.x + p.width/2, p.y, '+50');
+                      addScorePopup(p.x + p.width/2, p.y, mult > 1 ? '+100' : '+50');
                     }
                   }
                 }
@@ -3058,15 +3256,16 @@ transitionManager = new TransitionManager();
 
           for (const p of platforms) {
             if (p.broken) continue;
-            const overlapX = player.x + player.width > p.x + 2 && player.x < p.x + p.width - 2;
+            const overlapX = player.x + player.width > p.x + 4 && player.x < p.x + p.width - 4;
             if (player.vy > 0 && overlapX) {
               const prevBottom = player.y + player.height - player.vy;
               const currBottom = player.y + player.height;
-              if (prevBottom <= p.y + 8 && currBottom >= p.y - 4) {
+              if (prevBottom <= p.y + 12 && currBottom >= p.y - 6) {
                 if (!player.onGround && player.vy > 2) addLandingDust(player.x + player.width/2, player.y + player.height);
                 player.y = p.y - player.height;
                 player.vy = 0;
                 player.onGround = true;
+                if (player.jumpBuffer !== undefined) player.jumpBuffer = 0;
                 landed = true;
                 if (p.bounceOffset > 0) p.bounceOffset = Math.max(0, p.bounceOffset - 0.5);
                 break;
@@ -3079,11 +3278,12 @@ transitionManager = new TransitionManager();
               if (player.vy > 0 && overlapX) {
                 const prevBottom = player.y + player.height - player.vy;
                 const currBottom = player.y + player.height;
-                if (prevBottom <= p.y + 8 && currBottom >= p.y - 4) {
+                if (prevBottom <= p.y + 12 && currBottom >= p.y - 6) {
                   if (!player.onGround && player.vy > 2) addLandingDust(player.x + player.width/2, player.y + player.height);
                   player.y = p.y - player.height;
                   player.vy = 0;
                   player.onGround = true;
+                  if (player.jumpBuffer !== undefined) player.jumpBuffer = 0;
                   landed = true;
                   break;
                 }
@@ -3096,11 +3296,12 @@ transitionManager = new TransitionManager();
               if (player.vy > 0 && overlapX) {
                 const prevBottom = player.y + player.height - player.vy;
                 const currBottom = player.y + player.height;
-                if (prevBottom <= pipe.y + 8 && currBottom >= pipe.y - 4) {
+                if (prevBottom <= pipe.y + 12 && currBottom >= pipe.y - 6) {
                   if (!player.onGround && player.vy > 2) addLandingDust(player.x + player.width/2, player.y + player.height);
                   player.y = pipe.y - player.height;
                   player.vy = 0;
                   player.onGround = true;
+                  if (player.jumpBuffer !== undefined) player.jumpBuffer = 0;
                   landed = true;
                   break;
                 }
@@ -3171,6 +3372,7 @@ transitionManager = new TransitionManager();
                 (player.powerType === 'fire' && lv >= 4) ? [-30,0,30] :
                 (player.powerType === 'fire' && lv >= 3) ? [0] :
                 (player.powerType === 'earth' && lv >= 4) ? [-15,15] :
+                (player.powerType === 'earth' && lv >= 3) ? [0] :
                 (player.powerType === 'water' && lv >= 4) ? [-25,0,25] :
                 (player.powerType === 'wind' && lv >= 5) ? [-60,-30,0,30,60] :
                 (player.powerType === 'wind' && lv >= 4) ? [-30,0,30] :
@@ -3187,6 +3389,7 @@ transitionManager = new TransitionManager();
                 (player.powerType === 'light' && lv >= 5) ? [-50,-25,0,25,50] :
                 (player.powerType === 'light' && lv >= 4) ? [-30,0,30] :
                 (player.powerType === 'time' && lv >= 4) ? [-20,0,20] :
+                (player.powerType === 'time' && lv >= 3) ? [0] :
                 (player.powerType === 'vortex' && lv >= 4) ? [-25,-10,10,25] :
                 (player.powerType === 'toxic' && lv >= 4) ? [-30,0,30] :
                 (player.powerType === 'phantom' && lv >= 4) ? [-25,0,25] :
@@ -3201,7 +3404,7 @@ transitionManager = new TransitionManager();
                   powerProjectiles.push(new PowerProjectile(px, py, player.powerType, lv, right, ang));
                 }
               }
-              powerCooldown = Math.max(8, 20 - lv * 3);
+              powerCooldown = Math.max(5, 16 - lv * 2);
               playSound(POWER_SOUND[player.powerType] || 'fire');
             }
           }
@@ -3275,25 +3478,27 @@ transitionManager = new TransitionManager();
             playSound('brick');
           }
           if (stoneGiantTimer > 0) {
+            const giantPh = Math.floor(VIEW_HEIGHT * 0.75);
+            const giantPw = Math.floor(giantPh * 36 / 40);
+            const gpx = player.x + player.width/2 - giantPw/2;
+            const gpy = player.y + player.height/2 - giantPh/2;
             for (const e of getEnemies()) {
               if (!e.alive || e.deathTimer > 0) continue;
-              const pw = 80, ph = 70;
-              const px = player.x + player.width/2 - pw/2, py = player.y + player.height/2 - ph/2;
-              if (px + pw > e.x && px < e.x + e.width && py + ph > e.y && py < e.y + e.height) {
+              if (gpx + giantPw > e.x && gpx < e.x + e.width && gpy + giantPh > e.y && gpy < e.y + e.height) {
                 e.deathTimer = 15;
                 e.alive = false;
                 playSound('stomp');
                 score += 150;
-                addParticles(e.x + e.width/2, e.y + e.height/2, 10, POWER_COLOR.stone);
+                addParticles(e.x + e.width/2, e.y + e.height/2, 6, POWER_COLOR.stone);
                 addScorePopup(e.x + e.width/2, e.y, '+150');
               }
             }
             for (const p of getPlatforms()) {
               if (p.type === 'ground' || p.broken) continue;
-              const overlapX = player.x + player.width > p.x + 2 && player.x < p.x + p.width - 2;
-              const overlapY = player.y + player.height > p.y && player.y < p.y + p.height;
+              const overlapX = gpx + giantPw > p.x + 2 && gpx < p.x + p.width - 2;
+              const overlapY = gpy + giantPh > p.y && gpy < p.y + p.height;
               if (overlapX && overlapY) {
-                addParticles(p.x + p.width/2, p.y + p.height/2, 10, p.spaceStyle ? '#94a3b8' : '#78716c');
+                addParticles(p.x + p.width/2, p.y + p.height/2, 6, p.spaceStyle ? '#94a3b8' : '#78716c');
                 playSound('brick');
                 p.broken = true;
                 removePlatformFromChunks(p);
@@ -3303,7 +3508,7 @@ transitionManager = new TransitionManager();
 
           lightningStrikeTimer++;
           const groundY = sewerDepth > 0 ? SEWER_GROUND : GROUND_Y;
-          if (player.powerType === 'lightning' && player.powerLevel >= 4 && lightningStrikeTimer > 45) {
+          if (player.powerType === 'lightning' && player.powerLevel >= 4 && lightningStrikeTimer > 45 && lightningBolts.length < 2) {
             lightningStrikeTimer = 0;
             const rx = cameraX + 100 + Math.random() * (VIEW_WIDTH - 100);
             lightningBolts.push({ x: rx, y: -20, targetY: groundY - 10, life: 30, spread: false });
@@ -3314,7 +3519,6 @@ transitionManager = new TransitionManager();
             lb.y += 20;
             if (lb.y >= lb.targetY && !lb.spread) {
               lb.spread = true;
-              electricArcs.push({ x: lb.x, y: lb.targetY, left: -80, right: 80, life: 40 });
             }
             if (lb.spread) {
               for (const e of getEnemies()) {
@@ -3323,18 +3527,20 @@ transitionManager = new TransitionManager();
                   e.deathTimer = 15;
                   e.alive = false;
                   score += 100;
-                  addParticles(e.x + e.width/2, e.y + e.height/2, 8, POWER_COLOR.lightning);
+                  addParticles(e.x + e.width/2, e.y + e.height/2, 4, POWER_COLOR.lightning);
                   addScorePopup(e.x + e.width/2, e.y, '+100');
                 }
               }
+              if (electricArcs.length < 3) electricArcs.push({ x: lb.x, y: lb.targetY, left: -60, right: 60, life: 35 });
               lightningBolts.splice(i, 1);
             }
           }
+          if (electricArcs.length > 4) electricArcs = electricArcs.slice(-4);
           for (let i = electricArcs.length - 1; i >= 0; i--) {
             const ea = electricArcs[i];
             ea.life--;
-            ea.left -= 12;
-            ea.right += 12;
+            if (ea.left > -140) ea.left -= 10;
+            if (ea.right < 140) ea.right += 10;
             if (ea.life <= 0) { electricArcs.splice(i, 1); continue; }
             for (const e of getEnemies()) {
               if (!e.alive) continue;
@@ -3343,34 +3549,34 @@ transitionManager = new TransitionManager();
                 e.deathTimer = 15;
                 e.alive = false;
                 score += 100;
-                addParticles(e.x + e.width/2, e.y + e.height/2, 8, POWER_COLOR.lightning);
+                addParticles(e.x + e.width/2, e.y + e.height/2, 4, POWER_COLOR.lightning);
                 addScorePopup(e.x + e.width/2, e.y, '+100');
               }
             }
           }
 
-          fireOrbitAngle += 0.15;
+          fireOrbitAngle += 0.12;
           if (player.powerType === 'fire' && player.powerLevel >= 3) {
             const lv = player.powerLevel;
-            const counts = lv >= 5 ? 8 : lv >= 4 ? 5 : 3;
             const radii = lv >= 5 ? [30, 55] : lv >= 4 ? [40] : [35];
             const layers = lv >= 5 ? 2 : 1;
-            const countsPerLayer = lv >= 5 ? [4, 4] : lv >= 4 ? [5] : [3];
+            const countsPerLayer = lv >= 5 ? [3, 3] : lv >= 4 ? [4] : [3];
+            const enemies = getEnemies();
             for (let L = 0; L < layers; L++) {
               const r = radii[L], dropCount = countsPerLayer[L], off = L * 0.7;
               for (let i = 0; i < dropCount; i++) {
                 const a = fireOrbitAngle + off + (i / dropCount) * Math.PI * 2;
                 const dx = player.x + player.width/2 + Math.cos(a) * r - 12;
                 const dy = player.y + player.height/2 + Math.sin(a) * r - 12;
-                const hitSize = 28;
-                for (const e of getEnemies()) {
+                const hitSize = 26;
+                for (const e of enemies) {
                   if (!e.alive || e.deathTimer > 0) continue;
                   if (dx + hitSize > e.x && dx < e.x + e.width && dy + hitSize > e.y && dy < e.y + e.height) {
                     e.deathTimer = 15;
                     e.alive = false;
                     playSound('fire');
                     score += 100;
-                    addParticles(e.x + e.width/2, e.y + e.height/2, 6, POWER_COLOR.fire);
+                    addParticles(e.x + e.width/2, e.y + e.height/2, 4, POWER_COLOR.fire);
                     addScorePopup(e.x + e.width/2, e.y, '+100');
                   }
                 }
@@ -3383,8 +3589,8 @@ transitionManager = new TransitionManager();
               windPushTimer = 0;
               const px = player.x + player.width/2;
               const gY = sewerDepth > 0 ? SEWER_GROUND : GROUND_Y;
-              for (let i = 0; i < 12 && windParticles.length < 50; i++) {
-                windParticles.push({ x: px + (Math.random() - 0.5) * 200, y: gY - 100 - Math.random() * 200, vx: (Math.random() - 0.5) * 8, life: 25 });
+              for (let i = 0; i < 8 && windParticles.length < 35; i++) {
+                windParticles.push({ x: px + (Math.random() - 0.5) * 180, y: gY - 100 - Math.random() * 180, vx: (Math.random() - 0.5) * 7, life: 22 });
               }
               for (const e of getEnemies()) {
                 if (!e.alive || e.deathTimer > 0) continue;
@@ -3394,8 +3600,8 @@ transitionManager = new TransitionManager();
                   e.x += dir * 25;
                   e.vx = dir * 4;
                   windPushEffects.push({ x: e.x + e.width/2, y: e.y + e.height/2, dir, life: 20 });
-                  for (let j = 0; j < 5 && windParticles.length < 50; j++) {
-                    windParticles.push({ x: e.x + e.width/2, y: e.y + e.height/2, vx: dir * (6 + Math.random()*4), vy: (Math.random()-0.5)*4, life: 18 });
+                  for (let j = 0; j < 3 && windParticles.length < 35; j++) {
+                    windParticles.push({ x: e.x + e.width/2, y: e.y + e.height/2, vx: dir * (5 + Math.random()*3), vy: (Math.random()-0.5)*3, life: 16 });
                   }
                 }
               }
@@ -3413,8 +3619,8 @@ transitionManager = new TransitionManager();
                 e.freezeTimer = Math.max(e.freezeTimer || 0, 90 + player.powerLevel * 15);
               }
             }
-            if (Math.floor(Date.now() / 80) % 2 === 0) {
-              for (let i = 0; i < 3 && snowParticles.length < 50; i++) {
+            if (Math.floor(Date.now() / 100) % 2 === 0) {
+              for (let i = 0; i < 2 && snowParticles.length < 35; i++) {
                 snowParticles.push({
                   x: cameraX + Math.random() * (VIEW_WIDTH + 80) - 40,
                   y: -10,
@@ -3438,12 +3644,12 @@ transitionManager = new TransitionManager();
               for (const e of getEnemies()) {
                 if (!e.alive || e.deathTimer > 0) continue;
                 const dx = (e.x + e.width/2) - px, dy = (e.y + e.height/2) - py;
-                if (Math.sqrt(dx*dx + dy*dy) < 80) {
+                if (Math.sqrt(dx*dx + dy*dy) < 80 && lightKillBeams.length < 6) {
                   lightKillBeams.push({ px, py, ex: e.x + e.width/2, ey: e.y + e.height/2, life: 30 });
                   e.deathTimer = 15;
                   e.alive = false;
                   score += 100;
-                  addParticles(e.x + e.width/2, e.y + e.height/2, 8, POWER_COLOR.light);
+                  addParticles(e.x + e.width/2, e.y + e.height/2, 4, POWER_COLOR.light);
                   addScorePopup(e.x + e.width/2, e.y, '+100');
                 }
               }
@@ -3451,7 +3657,7 @@ transitionManager = new TransitionManager();
             lightAuraBursts = lightAuraBursts.filter(b => { b.r += 5; b.life--; return b.life > 0; });
           } else lightAuraBursts = [];
           lightKillBeams = lightKillBeams.filter(b => { b.life--; return b.life > 0; });
-          if (player.powerType === 'earth' && player.powerLevel >= 5 && player.onGround) {
+          if (player.powerType === 'earth' && player.powerLevel >= 5 && player.onGround && earthCracks.length < 5) {
             const gY = sewerDepth > 0 ? SEWER_GROUND : GROUND_Y;
             earthCracks.push({ x: player.x + player.width/2 - 40, y: gY, w: 80, life: 20 });
             for (const e of getEnemies()) {
@@ -3460,8 +3666,8 @@ transitionManager = new TransitionManager();
                 e.earthStunned = 15;
                 e.vx *= 0.3;
                 e.vy -= 2;
-                earthShockwaves.push({ x: e.x + e.width/2, y: e.y + e.height, r: 0, maxR: 50, life: 25 });
-                addParticles(e.x + e.width/2, e.y + e.height, 8, '#78716c');
+                if (earthShockwaves.length < 8) earthShockwaves.push({ x: e.x + e.width/2, y: e.y + e.height, r: 0, maxR: 50, life: 25 });
+                addParticles(e.x + e.width/2, e.y + e.height, 4, '#78716c');
               }
             }
             earthCracks = earthCracks.filter(c => { c.life--; return c.life > 0; });
@@ -3491,7 +3697,7 @@ transitionManager = new TransitionManager();
                     const tx = t.x + t.width/2, ty = t.y + t.height/2;
                     const ex = e.x + e.width/2, ey = e.y + e.height/2;
                     const ang = Math.atan2(ty - ey, tx - ex);
-                    flowerProjectiles.push({ x: ex, y: ey, vx: Math.cos(ang) * 6, vy: Math.sin(ang) * 6, life: 60 });
+                    if (flowerProjectiles.length < 10) flowerProjectiles.push({ x: ex, y: ey, vx: Math.cos(ang) * 6, vy: Math.sin(ang) * 6, life: 55 });
                   }
                 }
               }
@@ -3505,7 +3711,7 @@ transitionManager = new TransitionManager();
                   e.deathTimer = 15;
                   e.alive = false;
                   score += 100;
-                  addParticles(e.x + e.width/2, e.y + e.height/2, 6, POWER_COLOR.nature);
+                  addParticles(e.x + e.width/2, e.y + e.height/2, 4, POWER_COLOR.nature);
                   addScorePopup(e.x + e.width/2, e.y, '+100');
                   return false;
                 }
@@ -3538,7 +3744,7 @@ transitionManager = new TransitionManager();
                 e.deathTimer = 15;
                 e.alive = false;
                 score += 100;
-                addParticles(e.x + e.width / 2, e.y + e.height / 2, 8, POWER_COLOR.shadow);
+                addParticles(e.x + e.width / 2, e.y + e.height / 2, 4, POWER_COLOR.shadow);
                 addScorePopup(e.x + e.width / 2, e.y, '+100');
               } else {
                 const pull = Math.min(PULL_STRENGTH, 200 / (distToBH + 1));
@@ -3548,16 +3754,17 @@ transitionManager = new TransitionManager();
             }
           } else blackHole = null;
 
-          if (player.powerType === 'time' && player.powerLevel >= 4) {
-            const timeRange = 100 + player.powerLevel * 15;
+          if (player.powerType === 'time' && player.powerLevel >= 3) {
+            const timeRange = 180 + player.powerLevel * 25;
+            const timeVert = 120 + player.powerLevel * 20;
             for (const e of getEnemies()) {
               if (!e.alive || e.deathTimer > 0) continue;
               const dx = (e.x + e.width/2) - (player.x + player.width/2);
               const dy = (e.y + e.height/2) - (player.y + player.height/2);
-              if (Math.abs(dx) < timeRange && Math.abs(dy) < 80) {
+              if (Math.abs(dx) < timeRange && Math.abs(dy) < timeVert) {
                 e.timeSlowed = true;
-                e.vx *= 0.7;
-                e.vy *= 0.7;
+                e.vx *= 0.88;
+                e.vy *= 0.88;
               } else e.timeSlowed = false;
             }
           } else { for (const e of getEnemies()) e.timeSlowed = false; }
@@ -3762,7 +3969,7 @@ transitionManager = new TransitionManager();
                 e.prismLifted = false;
                 score += 100;
                 playSound('brick');
-                addParticles(e.x + e.width/2, e.y + e.height/2, 10, POWER_COLOR.prism);
+                addParticles(e.x + e.width/2, e.y + e.height/2, 6, POWER_COLOR.prism);
                 addScorePopup(e.x + e.width/2, e.y, '+100');
                 const ex = e.x + e.width/2, ey = e.y + e.height/2;
                 for (let i = 0; i < 6; i++) {
@@ -3796,7 +4003,7 @@ transitionManager = new TransitionManager();
           if (player.powerType === 'plasma' && player.powerLevel >= 4) {
             plasmaPulseTimer++;
             const spawnInterval = player.powerLevel >= 5 ? 45 : 55;
-            if (plasmaPulseTimer >= spawnInterval && plasmaPulses.length < 5) {
+            if (plasmaPulseTimer >= spawnInterval && plasmaPulses.length < 4) {
               plasmaPulseTimer = 0;
               plasmaPulses.push({
                 x: player.x + player.width/2,
@@ -3818,7 +4025,7 @@ transitionManager = new TransitionManager();
                   e.deathTimer = 15;
                   e.alive = false;
                   score += 100;
-                  addParticles(e.x + e.width/2, e.y + e.height/2, 8, POWER_COLOR.plasma);
+                  addParticles(e.x + e.width/2, e.y + e.height/2, 4, POWER_COLOR.plasma);
                   addScorePopup(e.x + e.width/2, e.y, '+100');
                   playSound('stomp');
                 }
@@ -3850,9 +4057,9 @@ transitionManager = new TransitionManager();
                 m.enemy.alive = false;
                 score += 100;
                 playSound('brick');
-                addParticles(m.enemy.x + m.enemy.width/2, m.enemy.y + m.enemy.height/2, 12, POWER_COLOR.meteor);
+                addParticles(m.enemy.x + m.enemy.width/2, m.enemy.y + m.enemy.height/2, 4, POWER_COLOR.meteor);
                 addScorePopup(m.enemy.x + m.enemy.width/2, m.enemy.y, '+100');
-                addParticles(m.enemy.x + m.enemy.width/2, m.enemy.y + m.enemy.height/2, 8, '#fbbf24');
+                addParticles(m.enemy.x + m.enemy.width/2, m.enemy.y + m.enemy.height/2, 4, '#fbbf24');
               }
               return m.life > 0 && m.y < VIEW_HEIGHT + 80;
             });
@@ -3908,7 +4115,7 @@ transitionManager = new TransitionManager();
                     const a = (i/14) * Math.PI * 2 + vh.spin;
                     if (voidSuckParticles.length < 50) voidSuckParticles.push({ x: ex, y: ey, vx: Math.cos(a)*4, vy: Math.sin(a)*4, life: 22, phase: 'implode' });
                   }
-                  addParticles(ex, ey, 10, '#1e1b4b');
+                  addParticles(ex, ey, 6, '#1e1b4b');
                   addParticles(ex, ey, 6, '#4c1d95');
                   addScorePopup(ex, ey, '+100');
                   playSound('stomp');
@@ -3926,7 +4133,7 @@ transitionManager = new TransitionManager();
               const dist = Math.sqrt(dx*dx + dy*dy);
               if (dist < beamRange) {
                 let pillar = beamPillars.find(bp => bp.enemy === e);
-                if (!pillar) {
+                if (!pillar && beamPillars.length < 8) {
                   pillar = { enemy: e, x: e.x + e.width/2, y: e.y, progress: 0, maxProgress: 1 };
                   beamPillars.push(pillar);
                 }
@@ -3953,15 +4160,18 @@ transitionManager = new TransitionManager();
 
           if (discoBallTimer > 0) {
             discoBallTimer--;
-            if (discoBallTimer <= 0) stopDiscoMusic();
-            if (discoBallTimer % 15 === 0) {
-              for (let i = 0; i < 8; i++) {
-                const ang = (Date.now() * 0.02 + i * 45) * Math.PI / 180;
-                discoRays.push({ x: VIEW_WIDTH/2 + cameraX, y: 40, angle: ang, dist: 0, life: 30, hue: (i * 45 + Date.now() * 2) % 360 });
+            if (discoBallTimer <= 0) { stopDiscoMusic(); discoCollectParticles = []; }
+            if (discoBallTimer % 45 === 0) {
+              const cx = VIEW_WIDTH/2 + cameraX;
+              const cy = 50;
+              for (let i = 0; i < 4; i++) {
+                const ang = (Date.now() * 0.02 + i * 90) * Math.PI / 180;
+                discoRays.push({ x: cx, y: cy, angle: ang, dist: 0, life: 25, hue: (i * 90 + Date.now() * 1) % 360, thick: 2 });
               }
             }
+            if (discoRays.length > 20) discoRays = discoRays.slice(-20);
             discoRays = discoRays.filter(r => {
-              r.dist += 14;
+              r.dist += 16;
               r.life--;
               if (r.life <= 0) return false;
               const rx = r.x + Math.cos(r.angle) * r.dist - cameraX;
@@ -3969,15 +4179,15 @@ transitionManager = new TransitionManager();
               for (const e of getEnemies()) {
                 if (!e.alive) continue;
                 const ex = e.x + e.width/2 - cameraX, ey = e.y + e.height/2;
-                if (Math.abs(ex - rx) < 40 && Math.abs(ey - ry) < 40 && r.dist > 30) {
+                if (Math.abs(ex - rx) < 45 && Math.abs(ey - ry) < 45 && r.dist > 25) {
                   e.deathTimer = 15;
                   e.alive = false;
                   score += 100;
-                  addParticles(e.x + e.width/2, e.y + e.height/2, 6, 'hsl(' + r.hue + ',80%,60%)');
+                  addParticles(e.x + e.width/2, e.y + e.height/2, 6, 'hsl(' + r.hue + ',90%,65%)');
                   addScorePopup(e.x + e.width/2, e.y, '+100');
                 }
               }
-              return r.dist < 600;
+              return r.dist < 650;
             });
           } else discoRays = [];
           if (sewerDepth === 0 && !inWaterRealm && flagX > 0 && player.x + player.width >= flagX && player.x <= flagX + 80) {
@@ -3988,10 +4198,13 @@ transitionManager = new TransitionManager();
                 playSound('flag');
               }
             } else if (!inSpaceRealm) {
+              if (discoBallTimer > 0) { discoBallTimer = 0; stopDiscoMusic(); discoRays = []; }
               playSound('flag');
               playSound('levelComplete');
               saveGameState();
               gameState = 'levelcomplete';
+              addParticles(player.x + player.width/2, VIEW_HEIGHT/2, 8, '#ffd700');
+              addParticles(player.x + player.width/2, VIEW_HEIGHT/2, 5, '#ffd700', '⭐');
             }
           }
 
@@ -4000,9 +4213,11 @@ transitionManager = new TransitionManager();
               const dx = (player.x + player.width/2) - (b.x + b.width/2);
               const dy = (player.y + player.height/2) - (b.y + b.height/2);
               const dist = Math.sqrt(dx*dx + dy*dy);
-              if (dist < 220 && dist > 0) {
-                b.x += dx * 0.15 / dist * 5;
-                b.y += dy * 0.15 / dist * 5;
+              const bonusMagnetRange = player.hasSuperMagnet ? 320 : 220;
+              if (dist < bonusMagnetRange && dist > 0) {
+                const pull = player.hasSuperMagnet ? 0.2 : 0.15;
+                b.x += dx * pull / dist * 5;
+                b.y += dy * pull / dist * 5;
               }
             }
             if (!b.collected && checkCollision(player, b)) {
@@ -4010,18 +4225,54 @@ transitionManager = new TransitionManager();
               if (b.type === 'magnet') {
                 player.hasMagnet = true;
                 score += 200;
-                addParticles(b.x + 14, b.y + 14, 10, '#60a5fa');
+                addParticles(b.x + 14, b.y + 14, 6, '#60a5fa');
                 addScorePopup(b.x + 14, b.y, '+200');
+              } else if (b.type === 'superMagnet') {
+                player.hasMagnet = true;
+                player.hasSuperMagnet = true;
+                score += 300;
+                addParticles(b.x + 14, b.y + 14, 6, '#818cf8');
+                addScorePopup(b.x + 14, b.y, '+300');
               } else if (b.type === 'disco') {
-                discoBallTimer = 210 * 60;
+                discoBallTimer = 90 * 60;
                 enemiesDanceFromDisco = true;
+                discoCollectFlash = 25;
+                for (let i = 0; i < 6; i++) {
+                  const a = (i / 6) * Math.PI * 2;
+                  discoCollectParticles.push({ x: b.x + 14, y: b.y + 14, vx: Math.cos(a) * 4, vy: Math.sin(a) * 4 - 3, life: 24, hue: (i * 60) % 360 });
+                }
                 playDiscoMusic();
                 score += 400;
-                addParticles(b.x + 14, b.y + 14, 12, '#ff6b9d');
+                addParticles(b.x + 14, b.y + 14, 8, '#ff6b9d');
                 addScorePopup(b.x + 14, b.y, '+400');
+              } else if (b.type === 'wings') {
+                player.hasWings = true;
+                score += 350;
+                addParticles(b.x + 14, b.y + 14, 6, '#93c5fd');
+                addScorePopup(b.x + 14, b.y, '+350');
+              } else if (b.type === 'shield') {
+                shieldBonusTimer = 360; /* 6 שניות */
+                score += 250;
+                addParticles(b.x + 14, b.y + 14, 6, '#60a5fa');
+                addScorePopup(b.x + 14, b.y, '+250');
+              } else if (b.type === 'timeShield') {
+                timeShieldTimer = 240; /* 4 שניות */
+                score += 280;
+                addParticles(b.x + 14, b.y + 14, 6, '#a78bfa');
+                addScorePopup(b.x + 14, b.y, '+280');
+              } else if (b.type === 'doubleCoins') {
+                doubleCoinsTimer = 600; /* 10 שניות */
+                score += 220;
+                addParticles(b.x + 14, b.y + 14, 6, '#fbbf24');
+                addScorePopup(b.x + 14, b.y, '+220');
+              } else if (b.type === 'extraLife') {
+                lives++;
+                score += 200;
+                addParticles(b.x + 14, b.y + 14, 6, '#ef4444');
+                addScorePopup(b.x + 14, b.y, '+1 UP!');
               } else {
                 score += b.type === 'gem' ? 300 : 500;
-                addParticles(b.x + 14, b.y + 14, 10, b.type === 'gem' ? '#a78bfa' : '#fbbf24');
+                addParticles(b.x + 14, b.y + 14, 6, b.type === 'gem' ? '#a78bfa' : '#fbbf24');
                 addScorePopup(b.x + 14, b.y, b.type === 'gem' ? '+300' : '+500');
               }
               playSound('bonus');
@@ -4038,7 +4289,7 @@ transitionManager = new TransitionManager();
                 e.alive = false;
                 score += 100;
                 playSound('water');
-                addParticles(e.x + e.width/2, e.y + e.height/2, 12, POWER_COLOR.toxic);
+                addParticles(e.x + e.width/2, e.y + e.height/2, 8, POWER_COLOR.toxic);
                 addScorePopup(e.x + e.width/2, e.y, '+100');
                 poisonClouds.push({ x: e.x + e.width/2, y: e.y + e.height/2, r: 0, life: 35, infectTimer: 0 });
               }
@@ -4073,10 +4324,12 @@ transitionManager = new TransitionManager();
             if (discoBallTimer <= 0) e.update(allPlatforms);
             if (invincibleTimer > 0 && e.deathTimer <= 0 && e.alive && !e.flowerForm && checkCollision(player, e)) {
               const dx = (player.x + player.width/2) - (e.x + e.width/2);
-              if (dx !== 0) player.x += Math.sign(dx) * 4;
+              if (dx !== 0) player.x += Math.sign(dx) * 6;
             }
             if (invincibleTimer <= 0 && stoneGiantTimer <= 0 && e.deathTimer <= 0 && !e.flowerForm && checkCollision(player, e)) {
-              if (player.vy > 0 && player.y + player.height - 10 < e.y + e.height / 2) {
+              const stompThreshold = ['fish','spider','jellyfish'].includes(e.type) ? e.y + e.height * 0.65 : e.y + e.height * 0.55;
+              if (player.vy > 0 && player.y + player.height - 14 <= stompThreshold) {
+                player.y = e.y - player.height + 2;
                 e.deathTimer = 15;
                 e.alive = false;
                 stompedAny = true;
@@ -4086,38 +4339,50 @@ transitionManager = new TransitionManager();
                 const comboBonus = (comboCount - 1) * 50;
                 const totalScore = baseScore + comboBonus;
                 score += totalScore;
-                addParticles(e.x + e.width/2, e.y + e.height/2, 10, '#ffd700');
-                addScorePopup(e.x + e.width/2, e.y, comboCount > 1 ? '+' + totalScore + ' x' + comboCount : '+100');
+                addParticles(e.x + e.width/2, e.y + e.height/2, 6, '#ffd700');
+                if (comboCount >= 3) addParticles(e.x + e.width/2, e.y + e.height/2, 6, '#ffd700', '⭐');
+                addScorePopup(e.x + e.width/2, e.y, comboCount > 1 ? '+' + totalScore + ' x' + comboCount : '+100', comboCount > 1 ? '#ffd700' : undefined);
               }
             }
           }
           if (stompedAny) {
-            player.vy = -11;
+            player.vy = -9.5;
+            player.onGround = false;
+            player.coyoteTimer = 6;
             playSound('stomp');
           } else {
             for (const e of enemies) {
               if (!e.alive || e.deathTimer > 0) continue;
               if (invincibleTimer <= 0 && stoneGiantTimer <= 0 && e.deathTimer <= 0 && !e.flowerForm && checkPlayerDamageCollision(player, e)) {
-                player.die();
+                if (player.big) {
+                  player.big = false;
+                  player.height = 40;
+                  invincibleTimer = 120;
+                  playSound('brick');
+                  addParticles(player.x + player.width/2, player.y + player.height/2, 6, '#ff6b9d');
+                } else {
+                  player.die();
+                }
                 break;
               }
             }
           }
 
           if (player.hasMagnet) {
+            const enemyMagnetRange = player.hasSuperMagnet ? 450 : 350;
             for (const e of getEnemies()) {
               if (!e.alive || e.deathTimer > 0) continue;
               const dx = (player.x + player.width/2) - (e.x + e.width/2);
               const dy = (player.y + player.height/2) - (e.y + e.height/2);
               const dist = Math.sqrt(dx*dx + dy*dy);
-              if (dist < 220 && dist > 15) {
-                const pull = 2.5 / (dist * 0.02 + 1);
+              if (dist < enemyMagnetRange && dist > 15) {
+                const pull = (player.hasSuperMagnet ? 3.2 : 2.5) / (dist * 0.02 + 1);
                 e.x += (dx / dist) * pull;
                 e.y += (dy / dist) * pull;
               }
             }
           }
-          const magnetRange = player.hasMagnet ? 220 : COIN_MAGNET_RANGE;
+          const magnetRange = player.hasSuperMagnet ? 520 : (player.hasMagnet ? 380 : COIN_MAGNET_RANGE);
           const collectibles = getCoins();
           for (const c of collectibles) {
             if (c.collected) continue;
@@ -4125,17 +4390,18 @@ transitionManager = new TransitionManager();
             const dy = (player.y + player.height/2) - (c.y + c.height/2);
             const dist = Math.sqrt(dx*dx + dy*dy);
             if (dist < magnetRange && dist > 0) {
-              const pull = player.hasMagnet ? 0.25 : 0.15;
+              const pull = player.hasSuperMagnet ? 0.52 : (player.hasMagnet ? 0.38 : 0.15);
               c.x += (dx / dist) * pull * 4;
               c.y += (dy / dist) * pull * 4;
             }
             if (checkCollision(player, c)) {
               c.collected = true;
-              coins++;
-              score += 50;
+              const mult = doubleCoinsTimer > 0 ? 2 : 1;
+              coins += mult;
+              score += 50 * mult;
               playSound('coin');
-              addParticles(c.x + 12, c.y + 12, 5, '#ffd700');
-              addScorePopup(c.x + 12, c.y, '+50');
+              addParticles(c.x + 12, c.y + 12, 4, '#ffd700');
+              addScorePopup(c.x + 12, c.y, mult > 1 ? '+100' : '+50');
             }
           }
 
@@ -4146,7 +4412,7 @@ transitionManager = new TransitionManager();
           } else {
             targetCameraX = Math.max(0, Math.min(player.x - 200, SEWER_WIDTH - VIEW_WIDTH));
           }
-          cameraX += (targetCameraX - cameraX) * 0.12;
+          cameraX += (targetCameraX - cameraX) * 0.14;
 
           if ((sewerDepth > 0 || inWaterRealm) && invincibleTimer <= 0 && stoneGiantTimer <= 0) {
             for (const pit of getWaterPits()) {
@@ -4251,6 +4517,17 @@ transitionManager = new TransitionManager();
 
         if (!octopusTransition) {
         drawBackground();
+        if (discoBallTimer > 0) {
+          ctx.save();
+          const dh = (Date.now() * 0.5) % 360;
+          const g = ctx.createLinearGradient(0, 0, 0, VIEW_HEIGHT);
+          g.addColorStop(0, 'hsla(' + dh + ',60%,50%,0.08)');
+          g.addColorStop(0.5, 'hsla(' + ((dh + 60) % 360) + ',50%,45%,0.04)');
+          g.addColorStop(1, 'hsla(' + ((dh + 120) % 360) + ',40%,40%,0.02)');
+          ctx.fillStyle = g;
+          ctx.fillRect(-50, -50, VIEW_WIDTH + 100, VIEW_HEIGHT + 100);
+          ctx.restore();
+        }
         drawLevelWeatherParticles();
         ctx.globalAlpha = 1;
 
@@ -4278,20 +4555,23 @@ transitionManager = new TransitionManager();
           const vy = vw.enemy.y + vw.enemy.height + 15;
           if (vx > -60 && vx < VIEW_WIDTH + 60) {
             ctx.save();
-            ctx.shadowColor = '#818cf8';
-            ctx.shadowBlur = 20;
             for (let ring = 0; ring < 2; ring++) {
-              const baseR = 14 + ring * 16 + Math.sin(Date.now() * 0.025 + ring) * 6;
+              const baseR = 14 + ring * 16 + Math.sin(Date.now() * 0.02 + ring) * 5;
               for (let i = 0; i < 5; i++) {
                 const off = (vw.angle * 1.8 + i * 1.2 + ring * 0.6) % (Math.PI * 2);
-                const r = baseR + Math.sin(Date.now() * 0.02 + i) * 4;
+                const r = baseR + Math.sin(Date.now() * 0.015 + i) * 3;
                 const wx = vx + Math.cos(off) * r;
                 const wy = vy + Math.sin(off) * r * 0.7;
-                ctx.globalAlpha = 0.9;
-                ctx.font = (24 + ring * 6) + 'px sans-serif';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText('🌪️', wx, wy);
+                ctx.globalAlpha = 0.85 + Math.sin(Date.now() * 0.01 + i) * 0.1;
+                const gr = ctx.createRadialGradient(wx, wy, 0, wx, wy, 12 + ring * 4);
+                gr.addColorStop(0, 'rgba(255,255,255,0.6)');
+                gr.addColorStop(0.4, 'rgba(129,140,248,0.5)');
+                gr.addColorStop(0.8, 'rgba(99,102,241,0.2)');
+                gr.addColorStop(1, 'rgba(99,102,241,0)');
+                ctx.fillStyle = gr;
+                ctx.beginPath();
+                ctx.ellipse(wx, wy, 8 + ring * 3, 10 + ring * 4, off, 0, Math.PI * 2);
+                ctx.fill();
               }
             }
             ctx.strokeStyle = 'rgba(129,140,248,0.5)';
@@ -4403,10 +4683,16 @@ transitionManager = new TransitionManager();
             if (fsx < -30 || fsx > VIEW_WIDTH + 30) continue;
             ctx.save();
             ctx.globalAlpha = 0.7 + Math.sin(fc.phase || 0) * 0.2;
-            ctx.font = '48px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('🔥', fsx, fc.y + 30);
+            const cy = fc.y + 30;
+            const gr = ctx.createRadialGradient(fsx, cy - 20, 0, fsx, cy, 35);
+            gr.addColorStop(0, 'rgba(255,220,150,0.95)');
+            gr.addColorStop(0.4, 'rgba(249,115,22,0.8)');
+            gr.addColorStop(0.7, 'rgba(234,88,12,0.4)');
+            gr.addColorStop(1, 'rgba(234,88,12,0)');
+            ctx.fillStyle = gr;
+            ctx.beginPath();
+            ctx.ellipse(fsx, cy, 18, 28, 0, 0, Math.PI * 2);
+            ctx.fill();
             ctx.restore();
           }
         }
@@ -4415,18 +4701,25 @@ transitionManager = new TransitionManager();
           const mx = m.x + 20 - cameraX;
           if (mx > -50 && mx < VIEW_WIDTH + 50) {
             ctx.save();
-            ctx.shadowColor = '#fbbf24';
-            ctx.shadowBlur = 25;
-            const trail = 1 + Math.sin(Date.now() * 0.2) * 0.15;
+            const sz = m.size * 0.5;
+            const trail = ctx.createLinearGradient(mx, m.y + sz, mx, m.y - sz * 3);
+            trail.addColorStop(0, 'rgba(251,191,36,0.5)');
+            trail.addColorStop(0.4, 'rgba(249,115,22,0.2)');
+            trail.addColorStop(1, 'rgba(249,115,22,0)');
+            ctx.fillStyle = trail;
+            ctx.beginPath();
+            ctx.ellipse(mx, m.y - sz, sz * 1.5, sz * 2.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+            const gr = ctx.createRadialGradient(mx, m.y, 0, mx, m.y, sz * 1.5);
+            gr.addColorStop(0, 'rgba(255,255,255,0.95)');
+            gr.addColorStop(0.3, 'rgba(251,191,36,0.9)');
+            gr.addColorStop(0.7, 'rgba(249,115,22,0.5)');
+            gr.addColorStop(1, 'rgba(234,88,12,0)');
+            ctx.fillStyle = gr;
             ctx.globalAlpha = 0.95;
-            ctx.font = (m.size * trail) + 'px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('☄️', mx, m.y);
-            ctx.globalAlpha = 0.5;
-            ctx.font = '24px sans-serif';
-            ctx.fillText('🔥', mx - 8, m.y + 25);
-            ctx.fillText('🔥', mx + 6, m.y + 28);
+            ctx.beginPath();
+            ctx.arc(mx, m.y, sz, 0, Math.PI * 2);
+            ctx.fill();
             ctx.restore();
           }
         }
@@ -4448,10 +4741,15 @@ transitionManager = new TransitionManager();
           if (wx > -30 && wx < VIEW_WIDTH + 30) {
             ctx.save();
             ctx.globalAlpha = w.life / 20;
-            ctx.font = '28px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(w.dir > 0 ? '➡️' : '⬅️', wx, w.y);
+            ctx.strokeStyle = 'rgba(148,163,184,0.8)';
+            ctx.lineWidth = 4;
+            const dir = w.dir > 0 ? 1 : -1;
+            ctx.beginPath();
+            ctx.moveTo(wx - dir * 15, w.y - 8);
+            ctx.lineTo(wx + dir * 15, w.y);
+            ctx.lineTo(wx - dir * 15, w.y + 8);
+            ctx.closePath();
+            ctx.stroke();
             ctx.restore();
           }
         }
@@ -4460,14 +4758,19 @@ transitionManager = new TransitionManager();
           if (shx + sh.r > -50 && shx - sh.r < VIEW_WIDTH + 50) {
             ctx.save();
             ctx.globalAlpha = (sh.life / 25) * 0.8;
-            ctx.strokeStyle = '#f472b6';
+            ctx.strokeStyle = 'rgba(244,114,182,0.9)';
             ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.arc(shx, sh.y, sh.r, 0, Math.PI * 2);
             ctx.stroke();
-            ctx.font = '20px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('🔊', shx, sh.y);
+            const gr = ctx.createRadialGradient(shx, sh.y, 0, shx, sh.y, 12);
+            gr.addColorStop(0, 'rgba(251,207,232,0.8)');
+            gr.addColorStop(0.5, 'rgba(244,114,182,0.5)');
+            gr.addColorStop(1, 'rgba(236,72,153,0)');
+            ctx.fillStyle = gr;
+            ctx.beginPath();
+            ctx.arc(shx, sh.y, 8, 0, Math.PI * 2);
+            ctx.fill();
             ctx.restore();
           }
         }
@@ -4667,12 +4970,24 @@ transitionManager = new TransitionManager();
           const fpx = fp.x - cameraX;
           if (fpx > -30 && fpx < VIEW_WIDTH + 30) {
             ctx.save();
-            ctx.shadowColor = '#ec4899';
-            ctx.shadowBlur = 12;
             ctx.globalAlpha = 0.9 + Math.sin(Date.now() * 0.008) * 0.1;
-            ctx.font = '26px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('🌸', fpx, fp.y + Math.sin(Date.now() * 0.01) * 3);
+            const cy = fp.y + Math.sin(Date.now() * 0.01) * 3;
+            const gr = ctx.createRadialGradient(fpx, cy - 4, 0, fpx, cy, 14);
+            gr.addColorStop(0, 'rgba(255,255,255,0.95)');
+            gr.addColorStop(0.3, 'rgba(251,207,232,0.9)');
+            gr.addColorStop(0.6, 'rgba(236,72,153,0.7)');
+            gr.addColorStop(1, 'rgba(219,39,119,0)');
+            ctx.fillStyle = gr;
+            for (let p = 0; p < 5; p++) {
+              const a = (p / 5) * Math.PI * 2 + Date.now() * 0.003;
+              ctx.beginPath();
+              ctx.ellipse(fpx + Math.cos(a) * 6, cy + Math.sin(a) * 6, 5, 8, a, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            ctx.fillStyle = 'rgba(254,240,138,0.9)';
+            ctx.beginPath();
+            ctx.arc(fpx, cy, 4, 0, Math.PI * 2);
+            ctx.fill();
             ctx.restore();
           }
         }
@@ -4681,12 +4996,22 @@ transitionManager = new TransitionManager();
           if (gx > -30 && gx < VIEW_WIDTH + 30) {
             ctx.save();
             ctx.globalAlpha = g.life / 40;
-            ctx.shadowColor = '#67e8f9';
-            ctx.shadowBlur = 15;
-            ctx.font = '22px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('💠', gx, g.y);
+            const gr = ctx.createRadialGradient(gx, g.y - 5, 0, gx, g.y, 14);
+            gr.addColorStop(0, 'rgba(255,255,255,0.95)');
+            gr.addColorStop(0.3, 'rgba(103,232,249,0.8)');
+            gr.addColorStop(0.6, 'rgba(147,51,234,0.5)');
+            gr.addColorStop(1, 'rgba(99,102,241,0)');
+            ctx.fillStyle = gr;
+            ctx.beginPath();
+            ctx.moveTo(gx, g.y - 10);
+            ctx.lineTo(gx + 8, g.y + 6);
+            ctx.lineTo(gx, g.y + 10);
+            ctx.lineTo(gx - 8, g.y + 6);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
             ctx.restore();
           }
         }
@@ -4694,26 +5019,31 @@ transitionManager = new TransitionManager();
           const layers = player.powerLevel >= 5 ? 2 : 1;
           const radii = player.powerLevel >= 5 ? [35, 65] : [45 + player.powerLevel * 5];
           const counts = player.powerLevel >= 5 ? [4, 6] : [3 + player.powerLevel];
-          const fontSizes = player.powerLevel >= 5 ? ['28px', '24px'] : ['20px'];
+          const sizes = player.powerLevel >= 5 ? [10, 8] : [9];
+          const px = player.x + player.width/2 - cameraX;
+          const py = player.y + player.height/2;
           for (let L = 0; L < layers; L++) {
-            const r = radii[L], dropCount = counts[L], off = L * 0.5;
-            ctx.save();
-            ctx.shadowColor = '#0ea5e9';
-            ctx.shadowBlur = 15 + L * 5;
+            const r = radii[L], dropCount = counts[L], off = L * 0.5, sz = sizes[L] || sizes[0];
             for (let i = 0; i < dropCount; i++) {
               const a = waterOrbitAngle + off + (i / dropCount) * Math.PI * 2;
-              const wobble = Math.sin(Date.now() * 0.008 + i) * 4;
-              const dx = player.x + player.width/2 + Math.cos(a) * (r + wobble) - cameraX;
-              const dy = player.y + player.height/2 + Math.sin(a) * (r + wobble * 0.5);
-              if (dx > -30 && dx < VIEW_WIDTH + 30) {
-                ctx.globalAlpha = 0.85 + Math.sin(Date.now() * 0.01 + i * 2) * 0.15;
-                ctx.font = fontSizes[L] + ' sans-serif';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText('💧', dx, dy);
+              const wobble = Math.sin(Date.now() * 0.006 + i) * 3;
+              const dx = px + Math.cos(a) * (r + wobble);
+              const dy = py + Math.sin(a) * (r + wobble * 0.5);
+              if (dx > -25 && dx < VIEW_WIDTH + 25) {
+                ctx.save();
+                ctx.globalAlpha = 0.85 + Math.sin(Date.now() * 0.008 + i * 2) * 0.12;
+                const gr = ctx.createRadialGradient(dx, dy - sz * 0.3, 0, dx, dy, sz * 1.8);
+                gr.addColorStop(0, 'rgba(255,255,255,0.9)');
+                gr.addColorStop(0.3, 'rgba(165,243,252,0.8)');
+                gr.addColorStop(0.6, 'rgba(14,165,233,0.6)');
+                gr.addColorStop(1, 'rgba(2,132,199,0)');
+                ctx.fillStyle = gr;
+                ctx.beginPath();
+                ctx.ellipse(dx, dy, sz * 0.85, sz * 1.2, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
               }
             }
-            ctx.restore();
           }
         }
         for (const lb of lightningBolts) {
@@ -4721,22 +5051,26 @@ transitionManager = new TransitionManager();
           if (sx > -30 && sx < VIEW_WIDTH + 30) {
             const endY = lb.targetY || lb.y + 60;
             ctx.save();
-            ctx.shadowColor = '#eab308';
-            ctx.shadowBlur = 25;
             ctx.strokeStyle = '#fef08a';
-            ctx.lineWidth = 5;
-            const zigzag = (t) => Math.sin(t * 0.5) * 12;
+            ctx.lineWidth = 4;
+            const zigzag = (t) => Math.sin(t * 0.4) * 10;
             ctx.beginPath();
             ctx.moveTo(sx, lb.y);
-            for (let py = lb.y + 8; py < endY; py += 8) {
+            for (let py = lb.y + 14; py < endY; py += 14) {
               ctx.lineTo(sx + zigzag(py), py);
             }
             ctx.lineTo(sx + zigzag(endY), endY);
             ctx.stroke();
-            ctx.globalAlpha = 0.9 + Math.sin(Date.now() * 0.2) * 0.1;
-            ctx.font = '32px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('⚡', sx, lb.y + 30);
+            const midY = lb.y + (endY - lb.y) * 0.4;
+            const gr = ctx.createRadialGradient(sx, midY, 0, sx, midY, 18);
+            gr.addColorStop(0, 'rgba(254,240,138,0.95)');
+            gr.addColorStop(0.5, 'rgba(250,204,21,0.5)');
+            gr.addColorStop(1, 'rgba(234,179,8,0)');
+            ctx.fillStyle = gr;
+            ctx.globalAlpha = 0.9 + Math.sin(Date.now() * 0.12) * 0.1;
+            ctx.beginPath();
+            ctx.arc(sx, midY, 12, 0, Math.PI * 2);
+            ctx.fill();
             ctx.restore();
           }
         }
@@ -4744,24 +5078,29 @@ transitionManager = new TransitionManager();
           const ex = ea.x - cameraX;
           if (ex + ea.right < -20 || ex + ea.left > VIEW_WIDTH + 20) continue;
           ctx.save();
-          ctx.globalAlpha = ea.life / 40;
-          ctx.shadowColor = '#eab308';
-          ctx.shadowBlur = 18;
+          const lifeRatio = ea.life / 35;
+          ctx.globalAlpha = lifeRatio;
           ctx.strokeStyle = '#fef08a';
-          ctx.lineWidth = 4;
+          ctx.lineWidth = 3;
           ctx.beginPath();
           ctx.moveTo(ex + ea.left, ea.y);
-          for (let j = ea.left; j < ea.right; j += 15) {
-            const jitter = Math.sin(j * 0.2 + Date.now() * 0.05) * 6;
-            ctx.lineTo(ex + j + 15, ea.y + jitter);
+          for (let j = ea.left + 28; j < ea.right; j += 28) {
+            const jitter = Math.sin(j * 0.15 + Date.now() * 0.04) * 5;
+            ctx.lineTo(ex + j, ea.y + jitter);
           }
           ctx.lineTo(ex + ea.right, ea.y);
           ctx.stroke();
-          for (let j = ea.left; j <= ea.right; j += 25) {
-            ctx.globalAlpha = (ea.life / 40) * (0.8 + Math.sin(Date.now() * 0.1 + j) * 0.2);
-            ctx.font = '22px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('⚡', ex + j, ea.y);
+          const step = 45;
+          for (let j = ea.left; j <= ea.right; j += step) {
+            ctx.globalAlpha = lifeRatio * (0.85 + Math.sin(Date.now() * 0.08 + j) * 0.15);
+            const gr = ctx.createRadialGradient(ex + j, ea.y, 0, ex + j, ea.y, 8);
+            gr.addColorStop(0, 'rgba(254,240,138,0.9)');
+            gr.addColorStop(0.6, 'rgba(250,204,21,0.4)');
+            gr.addColorStop(1, 'rgba(234,179,8,0)');
+            ctx.fillStyle = gr;
+            ctx.beginPath();
+            ctx.arc(ex + j, ea.y, 6, 0, Math.PI * 2);
+            ctx.fill();
           }
           ctx.restore();
         }
@@ -4793,27 +5132,31 @@ transitionManager = new TransitionManager();
           const lv = player.powerLevel;
           const radii = lv >= 5 ? [30, 55] : lv >= 4 ? [40] : [35];
           const layers = lv >= 5 ? 2 : 1;
-          const countsPerLayer = lv >= 5 ? [4, 4] : lv >= 4 ? [5] : [3];
+          const countsPerLayer = lv >= 5 ? [3, 3] : lv >= 4 ? [4] : [3];
+          const px = player.x + player.width/2 - cameraX;
+          const py = player.y + player.height/2;
           for (let L = 0; L < layers; L++) {
             const r = radii[L], dropCount = countsPerLayer[L], off = L * 0.7;
-            ctx.save();
-            ctx.shadowColor = '#f97316';
-            ctx.shadowBlur = 18;
             for (let i = 0; i < dropCount; i++) {
               const a = fireOrbitAngle + off + (i / dropCount) * Math.PI * 2;
-              const wobble = Math.sin(Date.now() * 0.01 + i) * 3;
-              const dx = player.x + player.width/2 + Math.cos(a) * (r + wobble) - cameraX;
-              const dy = player.y + player.height/2 + Math.sin(a) * (r + wobble * 0.5);
-              if (dx > -30 && dx < VIEW_WIDTH + 30) {
-                ctx.globalAlpha = 0.9 + Math.sin(Date.now() * 0.012 + i * 2) * 0.1;
-                const flicker = 1 + Math.sin(Date.now() * 0.15 + i) * 0.08;
-                ctx.font = (22 * flicker) + 'px sans-serif';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText('🔥', dx, dy);
+              const wobble = Math.sin(Date.now() * 0.006 + i) * 2;
+              const dx = px + Math.cos(a) * (r + wobble);
+              const dy = py + Math.sin(a) * (r + wobble * 0.5);
+              if (dx > -25 && dx < VIEW_WIDTH + 25) {
+                ctx.save();
+                const alpha = 0.85 + Math.sin(Date.now() * 0.008 + i) * 0.12;
+                ctx.globalAlpha = alpha;
+                const gr = ctx.createRadialGradient(dx, dy, 0, dx, dy, 12);
+                gr.addColorStop(0, 'rgba(255,200,100,0.95)');
+                gr.addColorStop(0.5, 'rgba(249,115,22,0.7)');
+                gr.addColorStop(1, 'rgba(234,88,12,0)');
+                ctx.fillStyle = gr;
+                ctx.beginPath();
+                ctx.arc(dx, dy, 10, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
               }
             }
-            ctx.restore();
           }
         }
         for (const bp of beamPillars) {
@@ -4827,7 +5170,7 @@ transitionManager = new TransitionManager();
           ctx.save();
           ctx.globalAlpha = 0.5 + bp.progress * 0.5;
           ctx.shadowColor = '#facc15';
-          ctx.shadowBlur = 20;
+          ctx.shadowBlur = 14;
           const gradient = ctx.createLinearGradient(bpx, topY, bpx, bottomY);
           gradient.addColorStop(0, 'rgba(254,240,138,0.1)');
           gradient.addColorStop(0.3, 'rgba(250,204,21,0.4)');
@@ -4845,12 +5188,16 @@ transitionManager = new TransitionManager();
           if (wx > -20 && wx < VIEW_WIDTH + 20) {
             ctx.save();
             ctx.globalAlpha = w.life / 25;
-            ctx.shadowColor = '#94a3b8';
-            ctx.shadowBlur = 12;
-            const swirl = Math.sin(Date.now() * 0.02 + w.x * 0.01) * 8;
-            ctx.font = '22px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('💨', wx + swirl, w.y + Math.cos(Date.now() * 0.015) * 4);
+            const swirl = Math.sin(Date.now() * 0.015 + w.x * 0.01) * 6;
+            const cx = wx + swirl, cy = w.y + Math.cos(Date.now() * 0.012) * 3;
+            ctx.strokeStyle = 'rgba(148,163,184,' + (0.5 + w.life/50) + ')';
+            ctx.lineWidth = 2;
+            for (let i = 0; i < 3; i++) {
+              const r = 6 + i * 4 + Math.sin(Date.now() * 0.02 + i) * 2;
+              ctx.beginPath();
+              ctx.arc(cx - r * 0.3, cy, r, 0, Math.PI);
+              ctx.stroke();
+            }
             ctx.restore();
           }
         }
@@ -4922,12 +5269,18 @@ transitionManager = new TransitionManager();
           if (cx + c.w > -20 && cx < VIEW_WIDTH + 20) {
             ctx.save();
             ctx.globalAlpha = c.life / 20;
-            ctx.shadowColor = '#57534e';
-            ctx.shadowBlur = 10;
-            ctx.fillStyle = '#78716c';
-            ctx.font = '18px sans-serif';
-            ctx.textAlign = 'center';
-            for (let i = 0; i < 6; i++) ctx.fillText('〰', cx + i * 16 + Math.sin(i) * 2, c.y - 5 + (i % 2) * 4);
+            ctx.strokeStyle = '#78716c';
+            ctx.lineWidth = 3;
+            for (let i = 0; i < 5; i++) {
+              const bx = cx + i * 18 + Math.sin(i * 1.3) * 4;
+              const by = c.y + (i % 2) * 6;
+              ctx.beginPath();
+              ctx.moveTo(bx, by);
+              for (let seg = 0; seg < 4; seg++) {
+                ctx.lineTo(bx + seg * 6 + Math.sin(seg) * 3, by + seg * 8 + (seg % 2) * 4);
+              }
+              ctx.stroke();
+            }
             ctx.restore();
           }
         }
@@ -4936,12 +5289,16 @@ transitionManager = new TransitionManager();
           if (sx > -20 && sx < VIEW_WIDTH + 20) {
             ctx.save();
             ctx.globalAlpha = (s.life / 120) * (0.8 + Math.sin(Date.now() * 0.005 + s.x) * 0.2);
-            ctx.shadowColor = '#bae6fd';
-            ctx.shadowBlur = 8;
-            ctx.fillStyle = '#e0f7ff';
-            ctx.font = (s.size || 18) + 'px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('❄', sx + Math.sin(Date.now() * 0.003) * 3, s.y);
+            const sz = (s.size || 18) * 0.4;
+            const px = sx + Math.sin(Date.now() * 0.003) * 3;
+            const gr = ctx.createRadialGradient(px, s.y, 0, px, s.y, sz * 1.5);
+            gr.addColorStop(0, 'rgba(255,255,255,0.95)');
+            gr.addColorStop(0.5, 'rgba(224,247,255,0.7)');
+            gr.addColorStop(1, 'rgba(186,230,253,0)');
+            ctx.fillStyle = gr;
+            ctx.beginPath();
+            ctx.arc(px, s.y, sz, 0, Math.PI * 2);
+            ctx.fill();
             ctx.restore();
           }
         }
@@ -5005,10 +5362,21 @@ transitionManager = new TransitionManager();
             ctx.strokeStyle = '#4c1d95';
             ctx.lineWidth = 2;
             ctx.stroke();
-            ctx.font = '40px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('🌀', 0, 0);
+            for (let arm = 0; arm < 4; arm++) {
+              const baseA = (arm / 4) * Math.PI * 2 + Date.now() * 0.015;
+              ctx.beginPath();
+              for (let t = 0; t <= 8; t++) {
+                const a = baseA + t * 0.4;
+                const r = 8 + t * 5 + Math.sin(t) * 3;
+                const x = Math.cos(a) * r;
+                const y = Math.sin(a) * r * 0.8;
+                if (t === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+              }
+              ctx.strokeStyle = 'rgba(76,29,149,' + (0.6 + Math.sin(Date.now()*0.02 + arm) * 0.2) + ')';
+              ctx.lineWidth = 2;
+              ctx.stroke();
+            }
             ctx.restore();
           }
         }
@@ -5017,43 +5385,83 @@ transitionManager = new TransitionManager();
         if (spaceshipAnimTimer <= 0) player.draw();
         if (phantomGhost && player.powerType === 'phantom' && player.powerLevel >= 3) {
           const lv = player.powerLevel;
-          const ghostSize = lv === 3 ? 24 : lv === 4 ? 32 : 40;
+          const ghostR = lv === 3 ? 14 : lv === 4 ? 18 : 22;
           const gx = phantomGhost.x - cameraX;
           if (gx > -40 && gx < VIEW_WIDTH + 40) {
             ctx.save();
             ctx.globalAlpha = 0.85 + Math.sin(Date.now() * 0.008) * 0.1;
-            ctx.shadowColor = POWER_COLOR.phantom;
-            ctx.shadowBlur = 12 + lv * 4;
-            ctx.font = ghostSize + 'px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('👻', gx, phantomGhost.y);
+            const gy = phantomGhost.y;
+            const gr = ctx.createRadialGradient(gx, gy - ghostR * 0.5, 0, gx, gy, ghostR * 1.8);
+            gr.addColorStop(0, 'rgba(255,255,255,0.5)');
+            gr.addColorStop(0.4, 'rgba(192,132,252,0.6)');
+            gr.addColorStop(0.7, 'rgba(147,51,234,0.4)');
+            gr.addColorStop(1, 'rgba(147,51,234,0)');
+            ctx.fillStyle = gr;
+            ctx.beginPath();
+            ctx.ellipse(gx, gy, ghostR * 0.85, ghostR * 1.1, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(30,27,75,0.7)';
+            ctx.beginPath();
+            ctx.arc(gx - ghostR * 0.3, gy - ghostR * 0.15, ghostR * 0.2, 0, Math.PI * 2);
+            ctx.arc(gx + ghostR * 0.3, gy - ghostR * 0.15, ghostR * 0.2, 0, Math.PI * 2);
+            ctx.fill();
             ctx.restore();
           }
         }
         if (discoBallTimer > 0) {
+          if (discoCollectFlash > 0) discoCollectFlash--;
+          discoCollectParticles = discoCollectParticles.filter(p => {
+            p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.life--;
+            if (p.life <= 0) return false;
+            const sx = p.x - cameraX;
+            if (sx < -30 || sx > VIEW_WIDTH + 30) return true;
+            ctx.save();
+            ctx.globalAlpha = p.life / 24;
+            ctx.fillStyle = 'hsl(' + p.hue + ',90%,65%)';
+            ctx.beginPath();
+            ctx.arc(sx, p.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+            return true;
+          });
+          if (discoCollectFlash > 0) {
+            ctx.save();
+            ctx.globalAlpha = discoCollectFlash / 25;
+            ctx.fillStyle = '#ff6b9d';
+            ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+            ctx.restore();
+          }
           ctx.save();
-          ctx.font = '56px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.shadowColor = '#ff6b9d';
-          ctx.shadowBlur = 25;
-          ctx.fillText('🪩', VIEW_WIDTH/2, 50);
+          const gr = ctx.createRadialGradient(VIEW_WIDTH/2, 50, 0, VIEW_WIDTH/2, 50, 35);
+          gr.addColorStop(0, 'rgba(255,255,255,0.9)');
+          gr.addColorStop(0.4, 'hsl(' + (Date.now() * 0.5 % 360) + ',80%,70%)');
+          gr.addColorStop(1, 'rgba(255,107,157,0.3)');
+          ctx.fillStyle = gr;
+          ctx.beginPath();
+          ctx.arc(VIEW_WIDTH/2, 50, 28, 0, Math.PI * 2);
+          ctx.fill();
           ctx.restore();
           for (const r of discoRays) {
             const rx = r.x + Math.cos(r.angle) * r.dist - cameraX;
             const ry = r.y + Math.sin(r.angle) * r.dist;
             if (rx < -20 || rx > VIEW_WIDTH + 20) continue;
             ctx.save();
-            ctx.strokeStyle = 'hsla(' + r.hue + ',90%,70%,' + (r.life/30) + ')';
-            ctx.lineWidth = 4;
+            ctx.strokeStyle = 'hsla(' + r.hue + ',95%,75%,' + (r.life/25) * 0.6 + ')';
+            ctx.lineWidth = r.thick || 2;
             ctx.beginPath();
-            const x0 = VIEW_WIDTH/2, y0 = 50;
-            ctx.moveTo(x0, y0);
+            ctx.moveTo(VIEW_WIDTH/2, 50);
             ctx.lineTo(rx, ry);
             ctx.stroke();
             ctx.restore();
           }
+          ctx.save();
+          ctx.strokeStyle = 'rgba(255,107,157,0.12)';
+          ctx.lineWidth = 2;
+          const r1 = 55 + Math.sin(Date.now() * 0.005) * 8;
+          ctx.beginPath();
+          ctx.arc(VIEW_WIDTH/2, 50, r1, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
         }
         if ((levelStartTimer > 0 || sewerStartTimer > 0) && gameState === 'playing') {
           if (sewerStartTimer > 0) sewerStartTimer--;

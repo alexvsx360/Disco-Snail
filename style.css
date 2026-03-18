@@ -120,6 +120,13 @@ h1 {
   background: linear-gradient(90deg, #dc2626, #f87171);
   animation: oxygen-blink 0.5s ease-in-out infinite;
 }
+#oxygenBar.oxygen-low .oxygen-fill {
+  animation: oxygen-pulse 0.4s ease-in-out infinite;
+}
+@keyframes oxygen-pulse {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(1.08); }
+}
 
 .cutscene-overlay {
   position: absolute;
@@ -310,4 +317,89 @@ h1 {
   .touch-settings { gap: 6px; }
   .touch-left { gap: 6px; }
   .touch-right { gap: 6px; }
+}
+
+#gameContainer.leaderboard-visible #touchControls {
+  pointer-events: none !important;
+}
+.leaderboard-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+  padding: 20px;
+  pointer-events: auto;
+}
+.leaderboard-box {
+  background: linear-gradient(180deg, #1e3a2f 0%, #0d2818 100%);
+  border: 3px solid #2d5a27;
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 400px;
+  width: 100%;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+}
+.leaderboard-box h2 {
+  font-family: 'Fredoka One', cursive;
+  color: #ffd700;
+  text-align: center;
+  margin-bottom: 16px;
+  font-size: 1.5rem;
+}
+.leaderboard-box table {
+  width: 100%;
+  border-collapse: collapse;
+  color: #fff;
+  font-size: 0.95rem;
+  margin-bottom: 16px;
+}
+.leaderboard-box th, .leaderboard-box td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+}
+.leaderboard-box th {
+  color: #ffd700;
+  font-weight: 800;
+}
+.leaderboard-add {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+.leaderboard-add input {
+  flex: 1;
+  padding: 12px 14px;
+  min-height: 44px;
+  border: 2px solid #2d5a27;
+  border-radius: 10px;
+  background: rgba(0,0,0,0.3);
+  color: #fff;
+  font-size: 1rem;
+  font-family: inherit;
+  touch-action: manipulation;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.leaderboard-add input::placeholder { color: rgba(255,255,255,0.5); }
+.leaderboard-add button {
+  padding: 10px 18px;
+  background: linear-gradient(180deg, #4ade80 0%, #22c55e 100%);
+  border: none;
+  border-radius: 10px;
+  color: #0d2818;
+  font-weight: 800;
+  font-size: 1rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+.leaderboard-add button:hover { filter: brightness(1.1); }
+.leaderboard-hint {
+  margin-top: 10px;
+  font-size: 0.85rem;
+  color: rgba(255,255,255,0.7);
+  text-align: center;
 }

@@ -32,7 +32,21 @@
       </div>
     </div>
     <div id="canvasWrapper">
-    <canvas id="gameCanvas" width="800" height="480" tabindex="0"></canvas>
+    <canvas id="gameCanvas" width="800" height="480" tabindex="0" style="touch-action: none;"></canvas>
+    <div id="leaderboardOverlay" class="leaderboard-overlay" style="display:none;">
+      <div class="leaderboard-box">
+        <h2>Leaderboard</h2>
+        <table id="leaderboardTable">
+          <thead><tr><th>#</th><th>Name</th><th>Score</th></tr></thead>
+          <tbody id="leaderboardBody"></tbody>
+        </table>
+        <div class="leaderboard-add" id="leaderboardAddForm">
+          <input type="text" id="leaderboardName" placeholder="Enter your name" maxlength="20" autocomplete="off" />
+          <button type="button" id="leaderboardAddBtn">Add to Leaderboard</button>
+        </div>
+        <p class="leaderboard-hint" id="leaderboardHint"></p>
+      </div>
+    </div>
     <div id="octopusCutscene" class="cutscene-overlay" style="display:none;">
       <canvas id="octopusCutsceneCanvas" width="800" height="480"></canvas>
     </div>
