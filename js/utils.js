@@ -262,6 +262,11 @@ function getCookie(name) {
   } catch (e) {}
   return null;
 }
+function clearGameStateCookie() {
+  try {
+    document.cookie = SAVE_COOKIE + '=;path=/;max-age=0;SameSite=Lax';
+  } catch (e) {}
+}
 
 function saveGameState() {
   try {
@@ -341,6 +346,7 @@ function addToLeaderboard(name, sc) {
 }
 
 function showLeaderboard(finalScore, isVictory, afterAdd) {
+  clearGameStateCookie();
   const el = document.getElementById('leaderboardOverlay');
   const body = document.getElementById('leaderboardBody');
   const nameIn = document.getElementById('leaderboardName');
@@ -373,6 +379,12 @@ function showLeaderboard(finalScore, isVictory, afterAdd) {
       nameIn.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); doAdd(); } };
     }
     setTimeout(function() { if (nameIn) nameIn.focus(); }, 150);
+  }
+  const newGameBtn = document.getElementById('leaderboardNewGameBtn');
+  if (newGameBtn) {
+    newGameBtn.onclick = function() {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', code: 'KeyR', bubbles: true }));
+    };
   }
   el.style.display = 'flex';
   el.style.visibility = 'visible';

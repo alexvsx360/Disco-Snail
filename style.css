@@ -403,3 +403,24 @@ h1 {
   color: rgba(255,255,255,0.7);
   text-align: center;
 }
+.leaderboard-new-game {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  padding: 14px 20px;
+  background: linear-gradient(180deg, #4ade80 0%, #22c55e 100%);
+  border: none;
+  border-radius: 10px;
+  color: #0d2818;
+  font-weight: 800;
+  font-size: 1.1rem;
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: 0 4px 0 #16a34a, 0 6px 12px rgba(0,0,0,0.3);
+  transition: transform 0.05s, box-shadow 0.05s;
+}
+.leaderboard-new-game:hover { filter: brightness(1.1); }
+.leaderboard-new-game:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #16a34a, 0 3px 8px rgba(0,0,0,0.3);
+}
